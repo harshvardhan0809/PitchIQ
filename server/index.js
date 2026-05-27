@@ -26,8 +26,8 @@ function loadEnvFile() {
 
 loadEnvFile()
 
-const port = Number(process.env.API_PORT ?? 3001)
-const host = process.env.API_HOST ?? '127.0.0.1'
+const port = Number(process.env.PORT ?? process.env.API_PORT ?? 3001)
+const host = process.env.API_HOST ?? '0.0.0.0'
 const footballDataKey = process.env.FOOTBALL_DATA_API_KEY ?? ''
 const footballDataBaseUrl = process.env.FOOTBALL_DATA_BASE_URL ?? 'https://api.football-data.org/v4'
 const competitionCode = process.env.FOOTBALL_DATA_COMPETITION ?? 'PL'
