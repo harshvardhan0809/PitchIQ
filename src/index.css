@@ -1,0 +1,43 @@
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  --ink: #142119;
+  --muted: #68756d;
+  --green: #16884a;
+  --green-dark: #096436;
+  --green-soft: #e4f4eb;
+  --surface: #ffffff;
+  --tile: #f6f8f7;
+  --line: #e5e9e7;
+  --page: #fbfcfb;
+  --radius: 13px;
+  --shadow: 0 1px 2px rgba(18, 38, 26, 0.025);
+  --sans: Inter, Arial, sans-serif;
+  --display: 'Barlow Condensed', Impact, sans-serif;
+  font-family: var(--sans);
+  color: var(--ink);
+  background: var(--page);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background: var(--page);
+}
+
+button,
+input {
+  font-family: inherit;
+}
