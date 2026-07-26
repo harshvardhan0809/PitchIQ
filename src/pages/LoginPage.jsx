@@ -1,0 +1,120 @@
+import { useEffect, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { useAuth } from '../lib/auth'
+import '../styles/marketing.css'
+
+export function LoginPage() {
+  const auth = useAuth()
+  const navigate = useNavigate()
+  const [params] = useSearchParams()
+  const next = params.get('next') || '/app'
+
+  const [mode, setMode] = useState(params.get('mode') === 'signup' ? 'signup' : 'signin')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState(null)
+
+  // Already signed in? Go straight to the app.
+  useEffect(() => {
+    if (auth.signedIn) navigate(next, { replace: true })
+  }, [auth.signedIn, navigate, next])
+
+  async function run(action, { redirect = true } = {}) {
+    setBusy(true)
+    setMessage(null)
+    try {
+      const result = await action()
+      if (result?.needsConfirmation) {
+        setMessage({ tone: 'good', text: 'Account created — check your email to confirm, then sign in.' })
+      } else if (result?.magicLinkSent) {
+        setMessage({ tone: 'good', text: 'Magic link sent. Check your email to finish signing in.' })
+      } else if (redirect) {
+        navigate(next, { replace: true })
+      }
+    } catch (error) {
+      setMessage({ tone: 'bad', text: error.message })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function submit(event) {
+    event.preventDefault()
+    run(() => (mode === 'signup'
+      ? auth.signUp(email, password)
+      : auth.signInWithPassword(email, password)))
+  }
+
+  return (
+    <div className="mkt">
+      <div className="auth-shell">
+        <div className="auth-card">
+          <Link className="auth-brand" to="/">
+            <span className="mkt-mark">P</span>
+            <strong>PitchIQ</strong>
+          </Link>
+
+          <h1>{mode === 'signup' ? 'Create your account' : 'Welcome back'}</h1>
+          <p className="auth-sub">
+            {mode === 'signup' ? 'Start free — no card required.' : 'Sign in to your PitchIQ account.'}
+          </p>
+
+          <div className="auth-tabs" role="tablist">
+            <button type="button" role="tab" data-active={mode === 'signin'} onClick={() => { setMode('signin'); setMessage(null) }}>
+              Sign in
+            </button>
+            <button type="button" role="tab" data-active={mode === 'signup'} onClick={() => { setMode('signup'); setMessage(null) }}>
+              Create account
+            </button>
+          </div>
+
+          <form className="auth-form" onSubmit={submit}>
+            <div className="auth-field">
+              <label htmlFor="email">Email</label>
+              <input id="email" type="email" value={email} autoComplete="email" required
+                placeholder="you@example.com" onChange={(e) => setEmail(e.target.value)} />
+            </div>
+
+            {auth.configured && (
+              <div className="auth-field">
+                <label htmlFor="password">Password</label>
+                <input id="password" type="password" value={password}
+                  autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} required
+                  placeholder="••••••••" onChange={(e) => setPassword(e.target.value)} />
+              </div>
+            )}
+
+            <button type="submit" className="mkt-btn mkt-btn-primary auth-submit" disabled={busy}>
+              {busy ? 'Please wait…' : mode === 'signup' ? 'Create account' : 'Sign in'}
+            </button>
+          </form>
+
+          {auth.configured ? (
+            <div className="auth-alt">
+              <button type="button" className="auth-link" disabled={busy}
+                onClick={() => run(() => auth.signInWithMagicLink(email), { redirect: false })}>
+                Email me a magic link instead
+              </button>
+              <div className="auth-divider">or</div>
+              <button type="button" className="mkt-btn mkt-btn-ghost auth-oauth" disabled={busy}
+                onClick={() => run(auth.signInWithGoogle, { redirect: false })}>
+                Continue with Google
+              </button>
+            </div>
+          ) : (
+            <p className="auth-foot">
+              Demo mode — set <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> for real accounts.
+            </p>
+          )}
+
+          {message && <p className={`auth-msg ${message.tone}`}>{message.text}</p>}
+
+          <p className="auth-foot">
+            <Link to="/">← Back to home</Link>
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}

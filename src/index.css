@@ -1,19 +1,23 @@
 @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600;700&display=swap');
 
 :root {
-  --ink: #142119;
-  --muted: #68756d;
-  --green: #16884a;
-  --green-dark: #096436;
-  --green-soft: #e4f4eb;
-  --surface: #ffffff;
-  --tile: #f6f8f7;
-  --line: #e5e9e7;
-  --page: #fbfcfb;
+  /* Dark premium palette — shared with the marketing/landing surfaces so the
+     whole product reads as one system. */
+  --ink: #eef4f0;
+  --muted: #93a49b;
+  --green: #24d67f;
+  --green-dark: #6fe0a3;
+  --green-soft: rgba(36, 214, 127, 0.13);
+  --surface: #111815;
+  --tile: #161f1a;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.15);
+  --page: #080b09;
   --radius: 13px;
-  --shadow: 0 1px 2px rgba(18, 38, 26, 0.025);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 30px rgba(0, 0, 0, 0.38);
   --sans: Inter, Arial, sans-serif;
   --display: 'Barlow Condensed', Impact, sans-serif;
+  color-scheme: dark;
   font-family: var(--sans);
   color: var(--ink);
   background: var(--page);

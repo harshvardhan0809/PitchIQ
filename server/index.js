@@ -3,535 +3,377 @@ import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { HttpError, bearerToken, json, preflight, resolveOrigin } from './lib/http.js'
+import { TtlCache } from './lib/cache.js'
+import { RateLimiter } from './lib/rateLimiter.js'
+import {
+  COMPETITIONS,
+  DEFAULT_COMPETITION,
+  getCompetition,
+  isKnownCompetition,
+  seasonLabel,
+  seasonStartYear,
+} from './lib/competitions.js'
+import { FootballDataClient } from './lib/providers/footballData.js'
+import { FplClient } from './lib/providers/fpl.js'
+import { getSpotlight } from './lib/spotlight.js'
+import { getPlayerDashboard, searchPlayers } from './lib/players.js'
+import { getCaptainBoard } from './lib/intelligence/captains.js'
+import { featureMeta, isEntitled, planForCredentials, PLAN_ORDER } from './lib/entitlements.js'
+import { SupabaseAuth } from './lib/supabaseAuth.js'
+
+/**
+ * Minimal .env reader for `node server/index.js` without a flag. Values are
+ * unquoted so `KEY="value"` does not keep its quotes, and existing environment
+ * variables always win.
+ */
 function loadEnvFile() {
   const envPath = resolve(dirname(fileURLToPath(import.meta.url)), '../.env')
   if (!existsSync(envPath)) return
 
-  readFileSync(envPath, 'utf8')
-    .split('\n')
-    .forEach((line) => {
-      const trimmed = line.trim()
-      if (!trimmed || trimmed.startsWith('#')) return
+  for (const line of readFileSync(envPath, 'utf8').split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#')) continue
 
-      const separator = trimmed.indexOf('=')
-      if (separator === -1) return
+    const separator = trimmed.indexOf('=')
+    if (separator === -1) continue
 
-      const key = trimmed.slice(0, separator).trim()
-      const value = trimmed.slice(separator + 1).trim()
-      if (key && process.env[key] === undefined) {
-        process.env[key] = value
-      }
-    })
+    const key = trimmed.slice(0, separator).trim()
+    const rawValue = trimmed.slice(separator + 1).trim()
+    const value = rawValue.replace(/^(['"])(.*)\1$/, '$2')
+    if (key && process.env[key] === undefined) process.env[key] = value
+  }
 }
 
 loadEnvFile()
 
 const port = Number(process.env.PORT ?? process.env.API_PORT ?? 3001)
 const host = process.env.API_HOST ?? '0.0.0.0'
-const footballDataKey = process.env.FOOTBALL_DATA_API_KEY ?? ''
-const footballDataBaseUrl = process.env.FOOTBALL_DATA_BASE_URL ?? 'https://api.football-data.org/v4'
-const competitionCode = process.env.FOOTBALL_DATA_COMPETITION ?? 'PL'
-const seasonLabel = process.env.FOOTBALL_DATA_SEASON_LABEL ?? '2025-2026'
-const fplBaseUrl = process.env.FPL_BASE_URL ?? 'https://fantasy.premierleague.com/api'
-const cache = new Map()
-const featuredPlayers = [
-  ['Mohamed Salah', 'Liverpool', 'Right Winger'],
-  ['Erling Haaland', 'Manchester City', 'Forward'],
-  ['Bruno Fernandes', 'Manchester United', 'Midfielder'],
-  ['Bukayo Saka', 'Arsenal', 'Right Winger'],
-  ['Cole Palmer', 'Chelsea', 'Midfielder'],
-  ['Alexander Isak', 'Newcastle United', 'Forward'],
-  ['Ollie Watkins', 'Aston Villa', 'Forward'],
-  ['Virgil van Dijk', 'Liverpool', 'Centre-Back'],
-  ['Alexis Mac Allister', 'Liverpool', 'Midfielder'],
-  ['Alisson Becker', 'Liverpool', 'Goalkeeper'],
-  ['Phil Foden', 'Manchester City', 'Midfielder'],
-  ['Bernardo Silva', 'Manchester City', 'Midfielder'],
-  ['Rodri', 'Manchester City', 'Midfielder'],
-  ['Ruben Dias', 'Manchester City', 'Centre-Back'],
-  ['Kevin De Bruyne', 'Manchester City', 'Midfielder'],
-  ['William Saliba', 'Arsenal', 'Centre-Back'],
-  ['Martin Odegaard', 'Arsenal', 'Midfielder'],
-  ['Declan Rice', 'Arsenal', 'Midfielder'],
-  ['Gabriel Martinelli', 'Arsenal', 'Winger'],
-  ['Kai Havertz', 'Arsenal', 'Forward'],
-  ['Enzo Fernandez', 'Chelsea', 'Midfielder'],
-  ['Moises Caicedo', 'Chelsea', 'Midfielder'],
-  ['Reece James', 'Chelsea', 'Right-Back'],
-  ['Alejandro Garnacho', 'Manchester United', 'Winger'],
-  ['Amad Diallo', 'Manchester United', 'Winger'],
-  ['Kobbie Mainoo', 'Manchester United', 'Midfielder'],
-  ['Bryan Mbeumo', 'Manchester United', 'Forward'],
-  ['Sandro Tonali', 'Newcastle United', 'Midfielder'],
-  ['Anthony Gordon', 'Newcastle United', 'Winger'],
-  ['Morgan Rogers', 'Aston Villa', 'Midfielder'],
-  ['Emiliano Martinez', 'Aston Villa', 'Goalkeeper'],
-  ['Dominik Szoboszlai', 'Liverpool', 'Midfielder'],
-  ['Andrew Robertson', 'Liverpool', 'Left-Back'],
-  ['Trent Alexander-Arnold', 'Liverpool', 'Right-Back'],
-  ['Son Heung-min', 'Tottenham Hotspur', 'Forward'],
-  ['James Maddison', 'Tottenham Hotspur', 'Midfielder'],
-  ['Cristian Romero', 'Tottenham Hotspur', 'Centre-Back'],
-  ['Jarrod Bowen', 'West Ham United', 'Forward'],
-  ['Lucas Paqueta', 'West Ham United', 'Midfielder'],
-  ['Eberechi Eze', 'Crystal Palace', 'Midfielder'],
-  ['Jean-Philippe Mateta', 'Crystal Palace', 'Forward'],
-  ['Jordan Pickford', 'Everton', 'Goalkeeper'],
-  ['Antoine Semenyo', 'Bournemouth', 'Forward'],
-  ['Bruno Guimaraes', 'Newcastle United', 'Midfielder'],
-  ['Joao Pedro', 'Chelsea', 'Forward'],
-  ['Liam Delap', 'Chelsea', 'Forward'],
-  ['Matheus Cunha', 'Manchester United', 'Forward'],
-  ['Benjamin Sesko', 'Manchester United', 'Forward'],
-  ['Viktor Gyokeres', 'Arsenal', 'Forward'],
-]
+const allowList = (process.env.ALLOWED_ORIGINS ?? '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean)
 
-function json(response, status, body) {
-  response.writeHead(status, {
-    'Access-Control-Allow-Origin': '*',
-    'Content-Type': 'application/json',
-  })
-  response.end(JSON.stringify(body))
+// Honour a configured default league, but never let a typo silently redirect
+// every request to a competition the caller did not ask for.
+const configuredDefault = process.env.FOOTBALL_DATA_COMPETITION
+const defaultCompetition = isKnownCompetition(configuredDefault)
+  ? configuredDefault.toUpperCase()
+  : DEFAULT_COMPETITION
+
+if (configuredDefault && !isKnownCompetition(configuredDefault)) {
+  console.warn(`Ignoring unknown FOOTBALL_DATA_COMPETITION "${configuredDefault}"; using ${DEFAULT_COMPETITION}.`)
 }
 
-function initials(name) {
-  return name
-    .split(' ')
-    .map((part) => part[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase()
+const cache = new TtlCache({ maxEntries: Number(process.env.CACHE_MAX_ENTRIES ?? 400) })
+
+// Football-Data's free tier is 10 requests/minute; stay a request under it and
+// let a short burst wait rather than trip the limit. FPL is unofficial with no
+// published cap, so meter it loosely just to stay polite.
+const footballDataLimiter = new RateLimiter({
+  limit: Number(process.env.FOOTBALL_DATA_RATE_LIMIT ?? 8),
+  intervalMs: 60 * 1000,
+  maxWaitMs: Number(process.env.FOOTBALL_DATA_MAX_WAIT_MS ?? 10000),
+  label: 'football data service',
+})
+
+const fplLimiter = new RateLimiter({
+  limit: Number(process.env.FPL_RATE_LIMIT ?? 30),
+  intervalMs: 60 * 1000,
+  maxWaitMs: Number(process.env.FPL_MAX_WAIT_MS ?? 15000),
+  label: 'Fantasy Premier League service',
+})
+
+const footballData = new FootballDataClient({
+  apiKey: process.env.FOOTBALL_DATA_API_KEY ?? '',
+  baseUrl: process.env.FOOTBALL_DATA_BASE_URL ?? 'https://api.football-data.org/v4',
+  cache,
+  limiter: footballDataLimiter,
+})
+
+const fpl = new FplClient({
+  baseUrl: process.env.FPL_BASE_URL ?? 'https://fantasy.premierleague.com/api',
+  cache,
+  limiter: fplLimiter,
+})
+
+// --- Authentication & entitlements -----------------------------------------
+// Supabase owns identity; this proxy validates its tokens and reads the plan.
+const supabaseAuth = new SupabaseAuth({
+  url: process.env.SUPABASE_URL,
+  anonKey: process.env.SUPABASE_ANON_KEY,
+  serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+  cache,
+})
+
+// Which credentials earn which plan. Access codes stand in for Stripe until
+// billing is wired; defaults exist only so the split is testable out of the box
+// and must be replaced in production.
+const parseList = (value, fallback = '') => (value ?? fallback)
+  .split(',').map((item) => item.trim().toUpperCase()).filter(Boolean)
+const entitlementConfig = {
+  proCodes: parseList(process.env.PRO_ACCESS_CODES, 'PITCHIQ-PRO'),
+  eliteCodes: parseList(process.env.ELITE_ACCESS_CODES, 'PITCHIQ-ELITE'),
+  proEmails: (process.env.PRO_EMAILS ?? '').split(',').map((item) => item.trim().toLowerCase()).filter(Boolean),
 }
 
-function formatDate(dateString) {
-  return new Intl.DateTimeFormat('en-GB', {
-    day: '2-digit',
-    month: 'short',
-  }).format(new Date(dateString))
+/** The caller's plan, from a Supabase-validated token. Anything else is free. */
+async function planOf(request) {
+  const user = await supabaseAuth.getUser(bearerToken(request))
+  return user?.plan ?? 'free'
 }
 
-function formatFixtureDate(event) {
-  const timestamp = event.utcDate ?? `${event.dateEvent}T${event.strTime ?? '00:00:00'}`
-  return new Intl.DateTimeFormat('en-GB', {
-    weekday: 'short',
-    day: '2-digit',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(timestamp))
-}
-
-function normalizeName(value) {
-  return String(value ?? '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '')
-}
-
-function fplPlayerPhotoUrl(code) {
-  if (!code) return null
-  return `https://resources.premierleague.com/premierleague/photos/players/250x250/p${code}.png`
-}
-
-function fplTeamCrestUrl(code) {
-  if (!code) return null
-  return `https://resources.premierleague.com/premierleague/badges/70/t${code}.png`
-}
-
-function historyKey(entry) {
-  const day = entry.kickoff_time?.slice(0, 10)
-  return `${day}|${entry.team_h_score}|${entry.team_a_score}|${entry.was_home}`
-}
-
-function matchHistoryKey(event, fdTeamId) {
-  const day = event.utcDate?.slice(0, 10)
-  const home = event.homeTeam?.id === fdTeamId
-  return `${day}|${event.score?.fullTime?.home}|${event.score?.fullTime?.away}|${home}`
-}
-
-function ensureFootballDataKey() {
-  if (!footballDataKey) {
-    throw new Error('Missing FOOTBALL_DATA_API_KEY. Add it in your .env to enable live mode.')
-  }
-}
-
-async function getCachedJson(base, endpoint, options = {}) {
-  const {
-    params = {},
-    headers = {},
-    ttl = 60 * 60 * 1000,
-    errorLabel = 'Provider request failed',
-  } = options
-
-  const url = new URL(`${base}/${endpoint}`)
-  Object.entries(params).forEach(([name, value]) => {
-    if (value !== undefined && value !== '') url.searchParams.set(name, value)
-  })
-
-  const key = url.toString()
-  const cached = cache.get(key)
-  if (cached && cached.expiresAt > Date.now()) return cached.data
-
-  const upstream = await fetch(url, { headers })
-  if (!upstream.ok) {
-    throw new Error(`${errorLabel} (status ${upstream.status}).`)
-  }
-
-  const data = await upstream.json()
-  cache.set(key, { data, expiresAt: Date.now() + ttl })
-  return data
-}
-
-function toSearchPlayer(player, team, position) {
-  const name = `${player.first_name} ${player.second_name}`.trim()
-  return {
-    id: `fpl:${player.id}`,
-    name,
-    initials: initials(name),
-    team: team?.name || 'Team unavailable',
-    position: position?.singular_name || 'Player',
-    photoUrl: fplPlayerPhotoUrl(player.code),
-  }
-}
-
-async function getFplBootstrap() {
-  return getCachedJson(fplBaseUrl, 'bootstrap-static/', {
-    ttl: 5 * 60 * 1000,
-    errorLabel: 'FPL request failed',
-  })
-}
-
-async function getFplFixtures() {
-  return getCachedJson(fplBaseUrl, 'fixtures/', {
-    ttl: 5 * 60 * 1000,
-    errorLabel: 'FPL fixtures request failed',
-  })
-}
-
-async function getFplElementSummary(playerId) {
-  return getCachedJson(fplBaseUrl, `element-summary/${playerId}/`, {
-    ttl: 15 * 60 * 1000,
-    errorLabel: 'FPL element summary request failed',
-  })
-}
-
-function buildUpcomingFromFpl(fplTeamId, teamsById, fixtures) {
-  const now = Date.now()
-  return (fixtures ?? [])
-    .filter((fixture) => !fixture.finished && (fixture.team_h === fplTeamId || fixture.team_a === fplTeamId))
-    .filter((fixture) => fixture.kickoff_time && new Date(fixture.kickoff_time).getTime() >= now)
-    .sort((left, right) => new Date(left.kickoff_time) - new Date(right.kickoff_time))
-    .map((fixture) => {
-      const isHome = fixture.team_h === fplTeamId
-      const homeTeam = teamsById.get(fixture.team_h)
-      const awayTeam = teamsById.get(fixture.team_a)
-      return {
-        id: `fpl-fixture:${fixture.id}`,
-        homeTeam: homeTeam?.name ?? 'Home',
-        awayTeam: awayTeam?.name ?? 'Away',
-        date: formatFixtureDate({ utcDate: fixture.kickoff_time }),
-        venue: isHome ? 'Home fixture' : 'Away fixture',
-        isHome,
+/** Read a small JSON body from a POST, with a hard size cap. */
+function readJsonBody(request, limit = 4096) {
+  return new Promise((resolve, reject) => {
+    let raw = ''
+    let size = 0
+    request.on('data', (chunk) => {
+      size += chunk.length
+      if (size > limit) {
+        reject(new HttpError('Request body too large.', 413))
+        request.destroy()
+        return
+      }
+      raw += chunk
+    })
+    request.on('end', () => {
+      try {
+        resolve(raw ? JSON.parse(raw) : {})
+      } catch {
+        reject(new HttpError('Request body must be valid JSON.', 400))
       }
     })
-}
-
-function buildUpcomingFromFootballData(fdTeamId, matches) {
-  const now = Date.now()
-  return (matches ?? [])
-    .filter((match) => match.status !== 'FINISHED' && match.utcDate && new Date(match.utcDate).getTime() >= now)
-    .sort((left, right) => new Date(left.utcDate) - new Date(right.utcDate))
-    .map((match) => ({
-      id: String(match.id),
-      homeTeam: match.homeTeam?.name ?? 'Home',
-      awayTeam: match.awayTeam?.name ?? 'Away',
-      date: formatFixtureDate(match),
-      venue: match.venue || 'Venue TBC',
-      isHome: match.homeTeam?.id === fdTeamId,
-    }))
-}
-
-function mergeUpcomingFixtures(primary, secondary, limit = 5) {
-  const seen = new Set()
-  const merged = []
-
-  for (const fixture of [...primary, ...secondary]) {
-    const key = `${fixture.date}|${fixture.homeTeam}|${fixture.awayTeam}`
-    if (seen.has(key)) continue
-    seen.add(key)
-    merged.push(fixture)
-    if (merged.length >= limit) break
-  }
-
-  return merged
-}
-
-function playerMatchStats(historyEntry) {
-  const minutes = historyEntry?.minutes ?? 0
-  const goals = historyEntry?.goals_scored ?? 0
-  const assists = historyEntry?.assists ?? 0
-  const expectedGoals = historyEntry?.expected_goals ?? '0.00'
-
-  return {
-    minutes,
-    goals,
-    assists,
-    expectedGoals,
-    shots: goals,
-    onTarget: assists,
-    possession: `${expectedGoals} xG`,
-  }
-}
-
-function resultForEvent(event, fdTeamId) {
-  const isHome = event.homeTeam?.id === fdTeamId
-  const own = Number(isHome ? event.score?.fullTime?.home : event.score?.fullTime?.away)
-  const other = Number(isHome ? event.score?.fullTime?.away : event.score?.fullTime?.home)
-  if (!Number.isFinite(own) || !Number.isFinite(other)) return '-'
-  if (own > other) return 'W'
-  if (own < other) return 'L'
-  return 'D'
-}
-
-async function footballDataApi(endpoint, params = {}, ttl = 60 * 60 * 1000) {
-  ensureFootballDataKey()
-  return getCachedJson(footballDataBaseUrl, endpoint, {
-    params,
-    ttl,
-    headers: { 'X-Auth-Token': footballDataKey },
-    errorLabel: 'Football-Data.org request failed',
+    request.on('error', () => reject(new HttpError('Could not read the request body.', 400)))
   })
 }
 
-async function getCompetitionTeamIndex() {
-  const response = await footballDataApi(`competitions/${competitionCode}/teams`, {}, 6 * 60 * 60 * 1000)
-  const byKey = new Map()
-  ;(response.teams ?? []).forEach((team) => {
-    const keys = [team.name, team.shortName, team.tla].map(normalizeName).filter(Boolean)
-    keys.forEach((key) => byKey.set(key, team))
-  })
-  return byKey
-}
+/**
+ * Redeem an access code to upgrade the signed-in user. Identity comes from the
+ * Supabase token; the code decides the plan (the Stripe stand-in); and the new
+ * plan is written to the user's app_metadata via the service role, so it is
+ * carried by every future token. The client refreshes its session to see it.
+ */
+async function handleUpgrade(request) {
+  const token = bearerToken(request)
+  const user = await supabaseAuth.getUser(token)
+  if (!user) throw new HttpError('Please sign in before upgrading.', 401)
 
-function mapFplTeamToFootballData(fplTeam, competitionTeamsByKey) {
-  const lookupKeys = [fplTeam.short_name, fplTeam.name].map(normalizeName).filter(Boolean)
-  for (const key of lookupKeys) {
-    const team = competitionTeamsByKey.get(key)
-    if (team) return team
-  }
-  return null
-}
-
-function rankedMatches(players, term) {
-  const lowerTerm = term.toLowerCase()
-  function relevance(player) {
-    const lowerName = player.name.toLowerCase()
-    const tokenStarts = lowerName.split(' ').some((part) => part.startsWith(lowerTerm))
-    if (lowerName.startsWith(lowerTerm)) return 0
-    if (tokenStarts) return 1
-    return 2
-  }
-
-  return players
-    .filter((player) => player.name.toLowerCase().includes(lowerTerm))
-    .sort((left, right) => {
-      const relevanceDifference = relevance(left) - relevance(right)
-      return relevanceDifference || left.name.localeCompare(right.name)
-    })
-    .slice(0, 10)
-}
-
-async function searchLivePlayers(search) {
-  const term = search.trim()
-  const bootstrap = await getFplBootstrap()
-  const teamsById = new Map((bootstrap.teams ?? []).map((team) => [team.id, team]))
-  const typesById = new Map((bootstrap.element_types ?? []).map((type) => [type.id, type]))
-  const liveCatalog = (bootstrap.elements ?? []).map((player) => (
-    toSearchPlayer(player, teamsById.get(player.team), typesById.get(player.element_type))
-  ))
-  if (term.length === 0) {
-    const featuredByName = new Set(featuredPlayers.map(([name]) => name.toLowerCase()))
-    const featured = liveCatalog.filter((player) => featuredByName.has(player.name.toLowerCase()))
-    return (featured.length > 0 ? featured : liveCatalog).slice(0, 10)
-  }
-
-  const catalogResults = rankedMatches(liveCatalog, term)
-  return catalogResults.slice(0, 10)
-}
-
-function estimateProbability(recentMatches, selectedTeamIsHome) {
-  if (recentMatches.length === 0) return null
-
-  const points = recentMatches.reduce((total, match) => {
-    if (match.result === 'W') return total + 3
-    if (match.result === 'D') return total + 1
-    return total
-  }, 0)
-  const formStrength = points / (recentMatches.length * 3)
-  const selectedChance = Math.round(27 + formStrength * 42 + (selectedTeamIsHome ? 5 : 0))
-  const drawChance = Math.round(30 - formStrength * 9)
-  const opponentChance = 100 - selectedChance - drawChance
-
-  return selectedTeamIsHome
-    ? { home: selectedChance, draw: drawChance, away: opponentChance }
-    : { home: opponentChance, draw: drawChance, away: selectedChance }
-}
-
-async function getLiveDashboard(identity) {
-  const playerId = Number(identity.replace('fpl:', ''))
-  if (!Number.isFinite(playerId)) throw new Error('Invalid player id.')
-
-  const bootstrap = await getFplBootstrap()
-  const player = (bootstrap.elements ?? []).find((entry) => entry.id === playerId)
-  if (!player) throw new Error('Player not found in FPL.')
-
-  const team = (bootstrap.teams ?? []).find((entry) => entry.id === player.team)
-  if (!team) throw new Error('No current team mapping was found for this player.')
-
-  const positionType = (bootstrap.element_types ?? []).find((entry) => entry.id === player.element_type)
-  const competitionTeamsByKey = await getCompetitionTeamIndex()
-  const mappedCompetitionTeam = mapFplTeamToFootballData(team, competitionTeamsByKey)
-  if (!mappedCompetitionTeam) {
-    throw new Error(`Could not map ${team.name} to Football-Data.org team id for ${competitionCode}.`)
-  }
-
-  const fdTeamId = mappedCompetitionTeam.id
-  const fdTeamName = mappedCompetitionTeam.name
-  const teamsById = new Map((bootstrap.teams ?? []).map((entry) => [entry.id, entry]))
-  const [finishedResponse, allMatchesResponse, elementSummary, fplFixtures] = await Promise.all([
-    footballDataApi(`teams/${fdTeamId}/matches`, { competitions: competitionCode, status: 'FINISHED' }, 30 * 60 * 1000),
-    footballDataApi(`teams/${fdTeamId}/matches`, { competitions: competitionCode, limit: 40 }, 30 * 60 * 1000),
-    getFplElementSummary(playerId),
-    getFplFixtures(),
-  ])
-
-  const historyByKey = new Map()
-  ;(elementSummary.history ?? []).forEach((entry) => {
-    if (entry.kickoff_time) historyByKey.set(historyKey(entry), entry)
-  })
-
-  const availableEvents = (finishedResponse.matches ?? [])
-    .filter((match) => match.score?.fullTime?.home !== null && match.score?.fullTime?.away !== null)
-    .sort((left, right) => new Date(right.utcDate) - new Date(left.utcDate))
-    .slice(0, 5)
-
-  const recentMatches = availableEvents.map((event) => {
-    const home = event.homeTeam?.id === fdTeamId
-    const homeScore = event.score?.fullTime?.home ?? '-'
-    const awayScore = event.score?.fullTime?.away ?? '-'
-    const stats = playerMatchStats(historyByKey.get(matchHistoryKey(event, fdTeamId)))
+  const body = await readJsonBody(request)
+  const plan = planForCredentials(user.email, body.code, entitlementConfig)
+  if (plan === 'free') {
     return {
-      id: String(event.id),
-      opponent: home ? event.awayTeam?.name : event.homeTeam?.name,
-      date: formatDate(event.utcDate),
-      score: `${homeScore} - ${awayScore}`,
-      result: resultForEvent(event, fdTeamId),
-      home,
-      ...stats,
+      upgraded: false,
+      plan: user.plan,
+      codeRejected: Boolean(String(body.code ?? '').trim()),
     }
-  })
+  }
 
-  const upcomingFixtures = mergeUpcomingFixtures(
-    buildUpcomingFromFpl(team.id, teamsById, fplFixtures),
-    buildUpcomingFromFootballData(fdTeamId, allMatchesResponse.matches),
-  )
-  const upcoming = upcomingFixtures[0] ?? null
-  const selectedTeamIsHome = upcoming?.isHome ?? false
-  const prediction = upcoming ? estimateProbability(recentMatches, selectedTeamIsHome) : null
-  const seasonComplete = upcomingFixtures.length === 0
-  const wins = recentMatches.filter((match) => match.result === 'W').length
-  const draws = recentMatches.filter((match) => match.result === 'D').length
-  const scored = availableEvents.reduce((total, event) => (
-    total + Number(event.homeTeam?.id === fdTeamId ? event.score?.fullTime?.home : event.score?.fullTime?.away)
-  ), 0)
-  const playerName = `${player.first_name} ${player.second_name}`.trim()
+  // Never downgrade: a lower-tier code from a higher-tier member is a no-op.
+  if (PLAN_ORDER.indexOf(plan) <= PLAN_ORDER.indexOf(user.plan)) {
+    return { upgraded: false, plan: user.plan, alreadyEntitled: true }
+  }
 
-  return {
-    id: `fpl:${player.id}`,
-    name: playerName,
-    initials: initials(playerName),
-    photoUrl: fplPlayerPhotoUrl(player.code),
-    teamCrestUrl: fplTeamCrestUrl(team.code),
-    team: fdTeamName,
-    number: player.squad_number || '-',
-    position: positionType?.singular_name || 'Player',
-    competition: `${competitionCode} · ${seasonLabel}`,
-    season: seasonLabel,
-    seasonComplete,
-    summary: {
-      matches: recentMatches.length,
-      wins,
-      draws,
-      goals: scored,
-    },
-    form: recentMatches.map((match) => match.result).filter((result) => result !== '-'),
-    recentMatches,
-    upcomingFixtures,
-    nextFixture: upcoming
-      ? {
-          homeTeam: upcoming.homeTeam,
-          awayTeam: upcoming.awayTeam,
-          date: upcoming.date,
-          venue: upcoming.venue || 'Venue TBC',
-          prediction,
-          advice: 'Form estimate calculated from Football-Data.org team results and home advantage.',
-        }
-      : {
-          homeTeam: fdTeamName,
-          awayTeam: seasonComplete ? 'Season complete' : 'Fixture pending',
-          date: seasonComplete
-            ? 'No upcoming Premier League fixtures are published yet'
-            : 'Upcoming schedule not available from current feeds',
-          venue: '',
-          prediction: null,
-          advice: seasonComplete
-            ? 'The current season has finished. New fixtures will appear when the next schedule is released.'
-            : '',
-        },
+  await supabaseAuth.setPlan(user.id, plan)
+  supabaseAuth.forget(token) // so a re-read reflects the change immediately
+  return { upgraded: true, plan }
+}
+
+/**
+ * Every route needs the season Football-Data considers current, and asking for
+ * it is a cached call, so resolve it once per request in one place.
+ */
+async function resolveSeason(competition) {
+  try {
+    const meta = await footballData.getCompetitionMeta(competition.code)
+    return {
+      season: seasonStartYear(meta.currentSeason),
+      label: seasonLabel(meta.currentSeason),
+    }
+  } catch (error) {
+    if (error instanceof HttpError && error.status >= 500) return { season: null, label: 'Current season' }
+    throw error
   }
 }
+
+/**
+ * Shape a premium payload for the caller's plan. Entitled callers get the full
+ * board; free callers get the single flagship pick plus a locked-count so the UI
+ * can present a genuine taste and a clear upgrade path — value first, paywall
+ * second.
+ */
+function gateBoard(result, plan, featureKey) {
+  const meta = featureMeta(featureKey)
+  const unlocked = isEntitled(plan, featureKey)
+  const base = {
+    feature: meta.key,
+    featureName: meta.name,
+    requiredPlan: meta.requiredPlan,
+    plan,
+    gameweek: result.gameweek,
+    gameweekName: result.gameweekName,
+    deadline: result.deadline,
+    phase: result.phase,
+    generatedAt: result.generatedAt,
+  }
+  if (unlocked) {
+    return { ...base, locked: false, topPick: result.board[0] ?? null, board: result.board }
+  }
+  return {
+    ...base,
+    locked: true,
+    topPick: result.board[0] ?? null,
+    board: result.board.slice(0, 1),
+    lockedCount: Math.max(0, result.board.length - 1),
+  }
+}
+
+const routes = [
+  {
+    pattern: /^\/api\/health$/,
+    cacheControl: 'public, max-age=30',
+    handle: async () => ({
+      status: 'ok',
+      live: true,
+      providers: ['Football-Data.org', 'Fantasy Premier League (unofficial)'],
+      footballDataConfigured: footballData.configured,
+      defaultCompetition,
+      competitions: Object.values(COMPETITIONS).map(({ code, name, country, supportsFpl }) => ({
+        code,
+        name,
+        country,
+        supportsFpl,
+      })),
+      cacheEntries: cache.size,
+    }),
+  },
+  {
+    pattern: /^\/api\/spotlight$/,
+    cacheControl: 'public, max-age=60',
+    handle: async (_match, url) => {
+      const competition = getCompetition(url.searchParams.get('league') ?? defaultCompetition)
+      return getSpotlight({ competition, footballData, fpl })
+    },
+  },
+  {
+    pattern: /^\/api\/players\/search$/,
+    cacheControl: 'public, max-age=60',
+    handle: async (_match, url) => {
+      const competition = getCompetition(url.searchParams.get('league') ?? defaultCompetition)
+      const { season } = await resolveSeason(competition)
+      const players = await searchPlayers({
+        query: url.searchParams.get('q') ?? '',
+        competition,
+        footballData,
+        fpl,
+        season,
+      })
+      return { competition: competition.code, players }
+    },
+  },
+  {
+    pattern: /^\/api\/players\/([^/]+)\/dashboard$/,
+    cacheControl: 'public, max-age=120',
+    handle: async (match, url) => {
+      const competition = getCompetition(url.searchParams.get('league') ?? defaultCompetition)
+      const { season } = await resolveSeason(competition)
+      return getPlayerDashboard({
+        identity: decodeURIComponent(match[1]),
+        competition,
+        footballData,
+        fpl,
+        season,
+      })
+    },
+  },
+  {
+    // Captain intelligence. FPL-backed, so Premier League only. Premium feature
+    // with a free preview of the single top pick.
+    pattern: /^\/api\/intel\/captains$/,
+    cacheControl: 'public, max-age=300',
+    handle: async (_match, url, request) => {
+      const competition = getCompetition(url.searchParams.get('league') ?? defaultCompetition)
+      if (!competition.supportsFpl) {
+        throw new HttpError('Captain intelligence is available for the Premier League only.', 400)
+      }
+      const plan = await planOf(request)
+      const result = await getCaptainBoard({ fpl, limit: 12 })
+      return gateBoard(result, plan, 'captain-picks')
+    },
+  },
+  {
+    // Validate the current Supabase session and report the plan the server sees.
+    pattern: /^\/api\/auth\/me$/,
+    cacheControl: 'no-store',
+    handle: async (_match, _url, request) => {
+      const user = await supabaseAuth.getUser(bearerToken(request))
+      if (!user) return { authenticated: false, user: null }
+      return { authenticated: true, user: { id: user.id, email: user.email, plan: user.plan } }
+    },
+  },
+]
 
 const server = createServer(async (request, response) => {
-  if (request.method === 'OPTIONS') {
-    response.writeHead(204, {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, OPTIONS',
-    })
-    return response.end()
+  const origin = resolveOrigin(request.headers.origin, allowList)
+
+  if (request.method === 'OPTIONS') return preflight(response, origin)
+
+  let url
+  try {
+    url = new URL(request.url, `http://${request.headers.host ?? 'localhost'}`)
+  } catch {
+    return json(response, 400, { error: 'Malformed request URL.' }, { origin })
   }
 
+  // Plan upgrade is the one write endpoint; everything else is read-only GET.
+  if (request.method === 'POST' && url.pathname === '/api/auth/upgrade') {
+    try {
+      return json(response, 200, await handleUpgrade(request), { origin })
+    } catch (error) {
+      const status = error instanceof HttpError ? error.status : 500
+      const message = error instanceof HttpError ? error.message : 'Upgrade failed.'
+      if (status === 500) console.error('Upgrade error:', error)
+      return json(response, status, { error: message }, { origin })
+    }
+  }
+
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
+    return json(response, 405, { error: 'Only GET and the upgrade endpoint are supported.' }, { origin })
+  }
+
+  const route = routes
+    .map((candidate) => ({ candidate, match: candidate.pattern.exec(url.pathname) }))
+    .find(({ match }) => match !== null)
+
+  if (!route) return json(response, 404, { error: 'Route not found.' }, { origin })
+
   try {
-    const url = new URL(request.url, `http://${request.headers.host}`)
-    if (url.pathname === '/api/health') {
-      return json(response, 200, {
-        live: true,
-        providers: ['FPL unofficial API', 'Football-Data.org'],
-        competition: competitionCode,
-        season: seasonLabel,
-        footballDataConfigured: Boolean(footballDataKey),
-        freeTier: true,
-      })
-    }
-
-    if (url.pathname === '/api/players/search') {
-      return json(response, 200, await searchLivePlayers(url.searchParams.get('q') ?? ''))
-    }
-
-    const dashboardMatch = url.pathname.match(/^\/api\/players\/([^/]+)\/dashboard$/)
-    if (dashboardMatch) {
-      return json(response, 200, await getLiveDashboard(decodeURIComponent(dashboardMatch[1])))
-    }
-
-    return json(response, 404, { error: 'Route not found.' })
+    const body = await route.candidate.handle(route.match, url, request)
+    return json(response, 200, body, { origin, cacheControl: route.candidate.cacheControl })
   } catch (error) {
-    return json(response, 500, { error: error.message })
+    if (error instanceof HttpError) {
+      return json(
+        response,
+        error.status,
+        { error: error.message, retryAfter: error.retryAfter ?? null },
+        { origin, retryAfter: error.retryAfter },
+      )
+    }
+    // Anything unmapped is a bug in this server; log it and stay vague outward.
+    console.error(`Unhandled error on ${url.pathname}:`, error)
+    return json(response, 500, { error: 'Something went wrong handling that request.' }, { origin })
   }
 })
 
 server.listen(port, host, () => {
-  console.log(`PitchIQ dual-provider proxy listening on http://${host}:${port}`)
-  if (!footballDataKey) {
-    console.warn('Warning: FOOTBALL_DATA_API_KEY is missing. Player search works, but dashboards will fail.')
-  } else {
-    console.log(`Football-Data.org configured for competition ${competitionCode}.`)
+  console.log(`PitchIQ proxy listening on http://${host}:${port}`)
+  console.log(allowList.length > 0 ? `CORS restricted to: ${allowList.join(', ')}` : 'CORS open (set ALLOWED_ORIGINS to restrict)')
+  if (!footballData.configured) {
+    console.warn('Warning: FOOTBALL_DATA_API_KEY is not set. Live competition endpoints will return 503.')
+  }
+  if (!supabaseAuth.configured) {
+    console.warn('Warning: SUPABASE_URL / SUPABASE_ANON_KEY are not set. Accounts are disabled and every request is treated as the free tier.')
+  } else if (!supabaseAuth.canManage) {
+    console.warn('Warning: SUPABASE_SERVICE_ROLE_KEY is not set. Sign-in works, but plan upgrades will fail until it is provided.')
   }
 })

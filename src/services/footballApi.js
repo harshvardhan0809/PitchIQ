@@ -1,86 +1,73 @@
-import { demoPlayers } from '../data/demoPlayers'
+import { demoDashboards, demoSearchResults, demoSpotlight } from '../data/demoData'
 
 const dataMode = import.meta.env.VITE_DATA_MODE ?? 'demo'
 export const usesLiveData = dataMode === 'live'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? ''
 
-function wait(value) {
-  return new Promise((resolve) => {
-    window.setTimeout(() => resolve(value), 120)
-  })
+export const leagueOptions = [
+  { code: 'PL', name: 'Premier League', country: 'England' },
+  { code: 'PD', name: 'La Liga', country: 'Spain' },
+  { code: 'SA', name: 'Serie A', country: 'Italy' },
+  { code: 'BL1', name: 'Bundesliga', country: 'Germany' },
+  { code: 'FL1', name: 'Ligue 1', country: 'France' },
+]
+
+/** An error that keeps the HTTP status so callers can react to 429 specifically. */
+export class ApiError extends Error {
+  constructor(message, status, retryAfter) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    this.retryAfter = retryAfter
+  }
 }
 
-async function readResponse(response, fallbackMessage) {
-  const data = await response.json().catch(() => null)
+function delay(value, ms = 140) {
+  return new Promise((resolve) => { window.setTimeout(() => resolve(value), ms) })
+}
+
+async function request(path) {
+  let response
+  try {
+    response = await fetch(`${API_BASE}${path}`)
+  } catch {
+    throw new ApiError('Could not reach the PitchIQ API. Check that the server is running.', 0)
+  }
+
+  const body = await response.json().catch(() => null)
 
   if (!response.ok) {
-    throw new Error(data?.error ?? fallbackMessage)
+    throw new ApiError(
+      body?.error ?? `The request failed (status ${response.status}).`,
+      response.status,
+      body?.retryAfter ?? null,
+    )
   }
 
-  return data
+  return body
 }
 
-export async function searchPlayers(query = '') {
-  if (usesLiveData) {
-    const response = await fetch(
-      `${API_BASE}/api/players/search?q=${encodeURIComponent(query)}`
-    )
-
-    return readResponse(
-      response,
-      'Unable to search players from live providers.'
-    )
-  }
-
-  const term = query.trim().toLowerCase()
-
-  const matches = demoPlayers
-    .filter((player) => {
-      if (!term) return true
-
-      return `${player.name} ${player.team} ${player.position}`
-        .toLowerCase()
-        .includes(term)
-    })
-    .map(
-      ({
-        id,
-        name,
-        initials,
-        team,
-        position,
-        photoUrl,
-      }) => ({
-        id,
-        name,
-        initials,
-        team,
-        position,
-        photoUrl,
-      })
-    )
-
-  return wait(matches)
+export async function fetchSpotlight(league = 'PL') {
+  if (!usesLiveData) return delay(demoSpotlight(league))
+  return request(`/api/spotlight?league=${encodeURIComponent(league)}`)
 }
 
-export async function getPlayerDashboard(id) {
-  if (usesLiveData) {
-    const response = await fetch(
-      `${API_BASE}/api/players/${encodeURIComponent(id)}/dashboard`
-    )
+export async function searchPlayers(query = '', league = 'PL') {
+  if (!usesLiveData) return delay(demoSearchResults(query, league))
 
-    return readResponse(
-      response,
-      'Unable to load this player report from live providers.'
-    )
+  const body = await request(
+    `/api/players/search?q=${encodeURIComponent(query)}&league=${encodeURIComponent(league)}`,
+  )
+  return body.players ?? []
+}
+
+export async function getPlayerDashboard(id, league = 'PL') {
+  if (!usesLiveData) {
+    const dashboard = demoDashboards[id]
+    if (!dashboard) throw new ApiError('That player is not in the demo dataset.', 404)
+    return delay(dashboard)
   }
 
-  const player = demoPlayers.find((entry) => entry.id === id)
-
-  if (!player) {
-    throw new Error('Player not found in the demo dataset.')
-  }
-
-  return wait(player)
+  return request(`/api/players/${encodeURIComponent(id)}/dashboard?league=${encodeURIComponent(league)}`)
 }
