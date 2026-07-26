@@ -24,7 +24,9 @@ const normalizePlan = (value) => (value === 'pro' || value === 'elite' ? value :
 
 // A single source of truth kept fresh by Supabase auth events (or demo writes);
 // synchronous getters read from it so the API client needs no async plumbing.
-let snapshot = { user: null, plan: 'free', token: null }
+// `ready` flips true once the initial session check completes, so route guards
+// don't bounce a signed-in user before their session is restored.
+let snapshot = { user: null, plan: 'free', token: null, ready: !supabaseConfigured }
 
 function publish(next) {
   snapshot = next
@@ -37,6 +39,7 @@ function fromSession(session) {
     user: user ? { id: user.id, email: user.email } : null,
     plan: normalizePlan(user?.app_metadata?.plan),
     token: session?.access_token ?? null,
+    ready: true,
   }
 }
 
@@ -54,19 +57,21 @@ function writeDemo(session) {
   } catch { /* ignore private-mode storage errors */ }
 }
 function demoPublish(user) {
-  publish({ user, plan: user ? normalizePlan(user.plan) : 'free', token: user ? 'demo' : null })
+  publish({ user, plan: user ? normalizePlan(user.plan) : 'free', token: user ? 'demo' : null, ready: true })
 }
 
 // --- initialisation --------------------------------------------------------
 if (supabaseConfigured) {
   loadSupabase().then((supabase) => {
-    if (!supabase) return
-    supabase.auth.getSession().then(({ data }) => publish(fromSession(data.session)))
+    if (!supabase) { publish({ ...snapshot, ready: true }); return }
+    supabase.auth.getSession()
+      .then(({ data }) => publish(fromSession(data.session)))
+      .catch(() => publish({ ...snapshot, ready: true }))
     supabase.auth.onAuthStateChange((_event, session) => publish(fromSession(session)))
   })
 } else {
   const demo = readDemo()
-  if (demo?.user) snapshot = { user: demo.user, plan: normalizePlan(demo.user.plan), token: 'demo' }
+  if (demo?.user) snapshot = { user: demo.user, plan: normalizePlan(demo.user.plan), token: 'demo', ready: true }
 }
 
 // --- actions ---------------------------------------------------------------
@@ -128,18 +133,36 @@ export async function redeemCode(code) {
     return { upgraded: true, plan }
   }
 
-  const response = await fetch(`${API_BASE}/api/auth/upgrade`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${snapshot.token}` },
-    body: JSON.stringify({ code }),
-  })
+  if (!snapshot.token) throw new Error('Please sign in before upgrading.')
+
+  let response
+  try {
+    response = await fetch(`${API_BASE}/api/auth/upgrade`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${snapshot.token}` },
+      body: JSON.stringify({ code }),
+    })
+  } catch {
+    throw new Error('Could not reach the server. Make sure the API is running (npm run api).')
+  }
+
   const body = await response.json().catch(() => null)
   if (!response.ok) throw new Error(body?.error ?? 'Upgrade failed.')
-  // Pull the new app_metadata into a fresh token so the UI (and future
-  // requests) reflect the upgrade.
+
+  // The plan is now written to the account. Refresh the token so it carries the
+  // new app_metadata, then publish using the plan the server just confirmed —
+  // authoritative, and immune to any token-claim propagation lag.
   if (body.upgraded) {
     const supabase = await loadSupabase()
-    await supabase.auth.refreshSession()
+    await supabase.auth.refreshSession().catch(() => {})
+    const { data } = await supabase.auth.getSession()
+    const session = data?.session
+    publish({
+      user: session?.user ? { id: session.user.id, email: session.user.email } : snapshot.user,
+      plan: normalizePlan(body.plan),
+      token: session?.access_token ?? snapshot.token,
+      ready: true,
+    })
   }
   return body
 }
@@ -166,6 +189,7 @@ export function useAuth() {
     plan: snap.plan,
     planName: PLAN_NAMES[snap.plan],
     signedIn: Boolean(snap.user),
+    ready: snap.ready,
     configured: supabaseConfigured,
     signUp,
     signInWithPassword,
