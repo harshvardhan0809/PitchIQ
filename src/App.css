@@ -214,6 +214,7 @@
 }
 .acct-primary:hover { background: var(--green-dark); }
 .acct-primary:disabled { opacity: 0.6; cursor: default; }
+.acct-upgrade { display: block; text-align: center; text-decoration: none; }
 .acct-secondary {
   flex: 1;
   border: 1px solid var(--line);

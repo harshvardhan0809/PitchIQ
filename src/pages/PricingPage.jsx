@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MarketingNav, MarketingFooter } from '../components/MarketingNav'
-import { useAuth, PLAN_NAMES } from '../lib/auth'
+import { useAuth, refreshSession, getPlan } from '../lib/auth'
 import { planMeets } from '../lib/plan'
+import { createSubscription, openCheckout } from '../services/billingApi'
 import '../styles/marketing.css'
 
 const TIERS = [
@@ -20,100 +21,75 @@ const TIERS = [
   },
   {
     id: 'pro', name: 'Pro', price: 5, featured: true,
-    desc: 'The full edge, every gameweek.',
+    desc: 'Every feature, every gameweek. One simple upgrade.',
     features: [
       { text: 'Everything in Free', on: true },
       { text: 'Full ranked captain board', on: true },
       { text: 'AI transfer advisor', on: true },
       { text: 'Differential finder', on: true },
+      { text: 'My Team squad analyzer', on: true },
       { text: 'Predicted points & price radar', on: true },
-      { text: 'Weekly briefing', on: true },
-    ],
-  },
-  {
-    id: 'elite', name: 'Elite', price: 12,
-    desc: 'For managers who plan ahead.',
-    features: [
-      { text: 'Everything in Pro', on: true },
-      { text: 'Team analyzer & score', on: true },
-      { text: 'Wildcard planner', on: true },
-      { text: 'Chip strategy', on: true },
-      { text: 'Team optimizer', on: true },
-      { text: 'Priority updates', on: true },
+      { text: 'Weekly briefing & everything we add', on: true },
     ],
   },
 ]
 
-function CheckoutModal({ tier, onClose }) {
-  const { redeemCode } = useAuth()
-  const navigate = useNavigate()
-  const [code, setCode] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [message, setMessage] = useState(null)
-
-  async function submit(event) {
-    event.preventDefault()
-    setBusy(true); setMessage(null)
-    try {
-      const result = await redeemCode(code)
-      if (result.upgraded) {
-        setMessage({ tone: 'good', text: `You're on ${PLAN_NAMES[result.plan]}! Redirecting…` })
-        setTimeout(() => navigate('/app'), 900)
-      } else if (result.alreadyEntitled) {
-        setMessage({ tone: 'good', text: 'Your current plan already includes this.' })
-      } else {
-        setMessage({ tone: 'bad', text: 'That access code was not recognised.' })
-      }
-    } catch (error) {
-      setMessage({ tone: 'bad', text: error.message })
-    } finally {
-      setBusy(false)
-    }
+// After checkout the plan is flipped by the webhook, which can lag a moment.
+// Refresh the session a few times until Pro shows, then continue.
+async function waitForPro(attempts = 6, delayMs = 1500) {
+  for (let index = 0; index < attempts; index += 1) {
+    if (getPlan() !== 'free') return true
+    await refreshSession()
+    if (getPlan() !== 'free') return true
+    await new Promise((resolve) => { setTimeout(resolve, delayMs) })
   }
-
-  return (
-    <div className="modal-scrim" onMouseDown={onClose}>
-      <div className="modal" role="dialog" aria-label="Checkout" onMouseDown={(e) => e.stopPropagation()}>
-        <h3>Upgrade to {tier.name}</h3>
-        <p className="modal-sub">Activate {tier.name} on your account.</p>
-        <div className="modal-summary">
-          <span className="plan">PitchIQ {tier.name}</span>
-          <span className="amt">£{tier.price}/mo</span>
-        </div>
-        <form className="auth-form" onSubmit={submit}>
-          <div className="auth-field">
-            <label htmlFor="checkout-code">Access code</label>
-            <input id="checkout-code" value={code} autoComplete="off" placeholder="Try PITCHIQ-PRO"
-              onChange={(e) => setCode(e.target.value)} />
-          </div>
-          <button type="submit" className="mkt-btn mkt-btn-primary auth-submit" disabled={busy}>
-            {busy ? 'Activating…' : `Activate ${tier.name}`}
-          </button>
-        </form>
-        {message && <p className={`auth-msg ${message.tone}`}>{message.text}</p>}
-        <p className="modal-note">
-          Card checkout arrives with Stripe. For now, an access code activates your plan —
-          it writes the entitlement to your account, exactly as a real payment will.
-        </p>
-        <button type="button" className="modal-close" onClick={onClose}>Cancel</button>
-      </div>
-    </div>
-  )
+  return getPlan() !== 'free'
 }
 
 export function PricingPage() {
-  const { plan, signedIn } = useAuth()
+  const { plan, signedIn, user } = useAuth()
   const navigate = useNavigate()
-  const [checkout, setCheckout] = useState(null)
+  const [busyTier, setBusyTier] = useState(null)
+  const [flow, setFlow] = useState(null) // { tone, text }
+
+  async function startCheckout(tier) {
+    setBusyTier(tier.id)
+    setFlow(null)
+    try {
+      const subscription = await createSubscription()
+      if (subscription.alreadyPro) { navigate('/app'); return }
+      await openCheckout({
+        subscriptionId: subscription.subscriptionId,
+        keyId: subscription.keyId,
+        email: user?.email,
+      })
+      setFlow({ tone: 'good', text: 'Payment received — activating your Pro access…' })
+      await waitForPro()
+      navigate('/app')
+    } catch (error) {
+      // Billing not live yet → let them know rather than failing silently.
+      if (error.status === 503) {
+        setFlow({ tone: 'bad', text: 'Checkout is being set up — please try again shortly.' })
+        return
+      }
+      // A user closing the payment window is not an error worth shouting about.
+      if (error.message && !/closed/i.test(error.message)) {
+        setFlow({ tone: 'bad', text: error.message })
+      }
+    } finally {
+      setBusyTier(null)
+    }
+  }
 
   function handleCta(tier) {
     if (tier.id === 'free') { navigate('/app'); return }
     if (!signedIn) { navigate(`/login?next=/pricing`); return }
     if (planMeets(plan, tier.id)) { navigate('/app'); return }
-    setCheckout(tier)
+    startCheckout(tier)
   }
 
   function ctaLabel(tier) {
+    if (busyTier === tier.id) return 'Opening checkout…'
     if (tier.id === 'free') return 'Open app'
     if (signedIn && plan === tier.id) return 'Current plan'
     if (signedIn && planMeets(plan, tier.id)) return 'Included'
@@ -152,7 +128,7 @@ export function PricingPage() {
                   <button
                     type="button"
                     className={`mkt-btn price-cta ${tier.featured ? 'mkt-btn-primary' : 'mkt-btn-ghost'}`}
-                    disabled={current}
+                    disabled={current || busyTier === tier.id}
                     onClick={() => handleCta(tier)}
                   >
                     {ctaLabel(tier)}
@@ -161,12 +137,12 @@ export function PricingPage() {
               )
             })}
           </div>
+
+          {flow && <p className={`auth-msg ${flow.tone}`} style={{ textAlign: 'center', marginTop: '18px' }}>{flow.text}</p>}
         </section>
 
         <MarketingFooter />
       </div>
-
-      {checkout && <CheckoutModal tier={checkout} onClose={() => setCheckout(null)} />}
     </div>
   )
 }

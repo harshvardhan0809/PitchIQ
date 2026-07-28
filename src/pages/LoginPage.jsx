@@ -80,8 +80,9 @@ export function LoginPage() {
               <div className="auth-field">
                 <label htmlFor="password">Password</label>
                 <input id="password" type="password" value={password}
-                  autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} required
-                  placeholder="••••••••" onChange={(e) => setPassword(e.target.value)} />
+                  autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} required minLength={6}
+                  placeholder={mode === 'signup' ? 'At least 6 characters' : '••••••••'}
+                  onChange={(e) => setPassword(e.target.value)} />
               </div>
             )}
 

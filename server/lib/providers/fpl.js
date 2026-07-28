@@ -32,6 +32,11 @@ export class FplClient {
       if (upstream.status === 429) {
         throw new HttpError('Fantasy Premier League API rate limit reached.', 429, { retryAfter: 60 })
       }
+      // Preserve 404 so callers can distinguish "no such resource" (e.g. an
+      // unknown team ID) from a genuine upstream failure.
+      if (upstream.status === 404) {
+        throw new HttpError('Fantasy Premier League resource not found.', 404)
+      }
       if (!upstream.ok) {
         throw new HttpError(`Fantasy Premier League request failed (status ${upstream.status}).`, 502)
       }
@@ -50,6 +55,29 @@ export class FplClient {
   getElementSummary(playerId) {
     return this.request(`element-summary/${playerId}/`, 15 * MINUTE)
   }
+
+  /** A manager's public entry (team name, current gameweek, bank, value). */
+  getEntry(entryId) {
+    return this.request(`entry/${entryId}/`, 5 * MINUTE)
+  }
+
+  /** A manager's saved picks for a gameweek: the 15-man squad and captaincy. */
+  getEntryPicks(entryId, event) {
+    return this.request(`entry/${entryId}/event/${event}/picks/`, 5 * MINUTE)
+  }
+}
+
+/**
+ * FPL team IDs are the digits in the manager's team URL. Validate before it
+ * reaches the upstream path so a malformed id fails fast with a clear message
+ * rather than as an opaque 404 or a path-injection attempt.
+ */
+export function parseEntryId(value) {
+  const digits = String(value ?? '').trim()
+  if (!/^\d{1,9}$/.test(digits)) {
+    throw new HttpError('Enter your FPL team ID — the number in your team’s URL.', 400)
+  }
+  return Number(digits)
 }
 
 export function playerPhotoUrl(code) {

@@ -14,13 +14,12 @@ import { loadSupabase, supabaseConfigured } from './supabaseClient'
  * app runs offline and the demo remains explorable. That path is clearly a
  * simulation, not a security boundary.
  */
-const API_BASE = import.meta.env.VITE_API_URL ?? ''
 const CHANGE_EVENT = 'pitchiq-auth-change'
 const DEMO_KEY = 'pitchiq_demo_auth'
-const DEMO_CODES = { 'PITCHIQ-PRO': 'pro', 'PITCHIQ-ELITE': 'elite' }
-export const PLAN_NAMES = { free: 'Free', pro: 'Pro', elite: 'Elite' }
+export const PLAN_NAMES = { free: 'Free', pro: 'Pro' }
 
-const normalizePlan = (value) => (value === 'pro' || value === 'elite' ? value : 'free')
+// Two tiers now; a legacy 'elite' session maps to 'pro' so access is preserved.
+const normalizePlan = (value) => (value === 'pro' || value === 'elite' ? 'pro' : 'free')
 
 // A single source of truth kept fresh by Supabase auth events (or demo writes);
 // synchronous getters read from it so the API client needs no async plumbing.
@@ -46,6 +45,39 @@ function fromSession(session) {
 export function getPlan() { return snapshot.plan }
 export function getAccessToken() { return snapshot.token }
 
+/**
+ * Return a *valid* access token for an authenticated request. Reading the cached
+ * snapshot can hand back a token that expired while the tab sat idle; asking
+ * Supabase for the session refreshes it if needed. This is what gated fetches
+ * use, so a Pro user is never locked out by a stale token that simply needed a
+ * refresh. Falls back to the snapshot token (demo/offline) if anything fails.
+ */
+export async function getFreshAccessToken() {
+  if (!supabaseConfigured) return snapshot.token
+  try {
+    const supabase = await loadSupabase()
+    if (!supabase) return snapshot.token
+    const { data } = await supabase.auth.getSession()
+    const session = data?.session ?? null
+    if (session) {
+      // Sync only the token, not the plan. The server reads the plan live from
+      // its own store, so the token needn't carry it; deriving plan from a token
+      // that briefly lags a change would fight setLocalPlan. Plan updates come
+      // from login/refresh (onAuthStateChange) and setLocalPlan instead.
+      if (session.access_token !== snapshot.token) {
+        publish({
+          ...snapshot,
+          token: session.access_token,
+          user: snapshot.user ?? (session.user ? { id: session.user.id, email: session.user.email } : null),
+          ready: true,
+        })
+      }
+      return session.access_token
+    }
+  } catch { /* fall back to whatever we have */ }
+  return snapshot.token
+}
+
 // --- demo (no Supabase) ----------------------------------------------------
 function readDemo() {
   try { return JSON.parse(window.localStorage.getItem(DEMO_KEY)) || null } catch { return null }
@@ -65,7 +97,19 @@ if (supabaseConfigured) {
   loadSupabase().then((supabase) => {
     if (!supabase) { publish({ ...snapshot, ready: true }); return }
     supabase.auth.getSession()
-      .then(({ data }) => publish(fromSession(data.session)))
+      .then(async ({ data }) => {
+        if (!data.session) { publish(fromSession(null)); return }
+        // The persisted session's token carries the app_metadata from when it was
+        // minted, so a plan written server-side afterwards (e.g. a Pro upgrade)
+        // would not show until the token next refreshed. Refresh on load so a
+        // returning user always sees their current plan, not a stale one.
+        try {
+          const { data: refreshed, error } = await supabase.auth.refreshSession()
+          publish(fromSession(error ? data.session : (refreshed.session ?? data.session)))
+        } catch {
+          publish(fromSession(data.session))
+        }
+      })
       .catch(() => publish({ ...snapshot, ready: true }))
     supabase.auth.onAuthStateChange((_event, session) => publish(fromSession(session)))
   })
@@ -75,8 +119,22 @@ if (supabaseConfigured) {
 }
 
 // --- actions ---------------------------------------------------------------
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const MIN_PASSWORD = 6
+
+// Validate credentials in one place so *every* entry point (login page, account
+// menu, anywhere) enforces them — a form that forgets `required` can't slip an
+// empty password through.
+function assertCredentials(email, password) {
+  if (!EMAIL_RE.test(String(email ?? '').trim())) throw new Error('Enter a valid email address.')
+  if (!password || password.length < MIN_PASSWORD) {
+    throw new Error(`Password must be at least ${MIN_PASSWORD} characters.`)
+  }
+}
+
 export async function signUp(email, password) {
   if (!supabaseConfigured) return demoSignIn(email)
+  assertCredentials(email, password)
   const supabase = await loadSupabase()
   const { data, error } = await supabase.auth.signUp({ email, password })
   if (error) throw new Error(error.message)
@@ -85,6 +143,7 @@ export async function signUp(email, password) {
 
 export async function signInWithPassword(email, password) {
   if (!supabaseConfigured) return demoSignIn(email)
+  assertCredentials(email, password)
   const supabase = await loadSupabase()
   const { error } = await supabase.auth.signInWithPassword({ email, password })
   if (error) throw new Error(error.message)
@@ -98,10 +157,13 @@ const postAuthRedirect = () => `${window.location.origin}/app`
 
 export async function signInWithMagicLink(email) {
   if (!supabaseConfigured) return demoSignIn(email)
+  if (!EMAIL_RE.test(String(email ?? '').trim())) throw new Error('Enter a valid email address.')
   const supabase = await loadSupabase()
   const { error } = await supabase.auth.signInWithOtp({
     email,
-    options: { emailRedirectTo: postAuthRedirect() },
+    // Magic links sign in EXISTING accounts only — they must not create a
+    // password-less account. New users sign up with a password first.
+    options: { emailRedirectTo: postAuthRedirect(), shouldCreateUser: false },
   })
   if (error) throw new Error(error.message)
   return { magicLinkSent: true }
@@ -118,53 +180,35 @@ export async function signInWithGoogle() {
   return {}
 }
 
+/**
+ * Update the locally-known plan without touching the token. The server reads the
+ * real plan from its own store (the subscriptions table), so gated views only
+ * need the client to re-render and re-fetch — no token refresh, which avoids the
+ * refresh-token rotation that made repeated changes flaky.
+ */
+export function setLocalPlan(plan) {
+  publish({ ...snapshot, plan: normalizePlan(plan) })
+}
+
+/**
+ * Pull the latest session so a plan just written server-side (e.g. by the
+ * billing webhook after checkout) is reflected in the app. Safe to call
+ * repeatedly; a no-op in demo mode.
+ */
+export async function refreshSession() {
+  if (!supabaseConfigured) return getPlan()
+  const supabase = await loadSupabase()
+  try {
+    const { data } = await supabase.auth.refreshSession()
+    if (data?.session) publish(fromSession(data.session))
+  } catch { /* keep the current snapshot */ }
+  return getPlan()
+}
+
 export async function signOut() {
   if (!supabaseConfigured) { writeDemo(null); demoPublish(null); return }
   const supabase = await loadSupabase()
   await supabase.auth.signOut()
-}
-
-export async function redeemCode(code) {
-  if (!supabaseConfigured) {
-    const plan = DEMO_CODES[String(code ?? '').trim().toUpperCase()] ?? 'free'
-    if (plan === 'free') return { upgraded: false, codeRejected: true }
-    const user = { ...(snapshot.user ?? { email: 'demo@local' }), plan }
-    writeDemo({ user }); demoPublish(user)
-    return { upgraded: true, plan }
-  }
-
-  if (!snapshot.token) throw new Error('Please sign in before upgrading.')
-
-  let response
-  try {
-    response = await fetch(`${API_BASE}/api/auth/upgrade`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${snapshot.token}` },
-      body: JSON.stringify({ code }),
-    })
-  } catch {
-    throw new Error('Could not reach the server. Make sure the API is running (npm run api).')
-  }
-
-  const body = await response.json().catch(() => null)
-  if (!response.ok) throw new Error(body?.error ?? 'Upgrade failed.')
-
-  // The plan is now written to the account. Refresh the token so it carries the
-  // new app_metadata, then publish using the plan the server just confirmed —
-  // authoritative, and immune to any token-claim propagation lag.
-  if (body.upgraded) {
-    const supabase = await loadSupabase()
-    await supabase.auth.refreshSession().catch(() => {})
-    const { data } = await supabase.auth.getSession()
-    const session = data?.session
-    publish({
-      user: session?.user ? { id: session.user.id, email: session.user.email } : snapshot.user,
-      plan: normalizePlan(body.plan),
-      token: session?.access_token ?? snapshot.token,
-      ready: true,
-    })
-  }
-  return body
 }
 
 function demoSignIn(email) {
@@ -196,6 +240,5 @@ export function useAuth() {
     signInWithMagicLink,
     signInWithGoogle,
     signOut,
-    redeemCode,
   }
 }

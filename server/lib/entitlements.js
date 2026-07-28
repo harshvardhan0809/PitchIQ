@@ -12,19 +12,19 @@
  * shape below does not change when that lands; only `resolvePlan` does.
  */
 
-export const PLAN_ORDER = ['free', 'pro', 'elite']
-const RANK = { free: 0, pro: 1, elite: 2 }
+// Two tiers: Free and Pro. Pro unlocks everything — there is no higher plan.
+export const PLAN_ORDER = ['free', 'pro']
+const RANK = { free: 0, pro: 1 }
 
 export const PLANS = {
   free: { id: 'free', name: 'Free', priceMonthly: 0 },
   pro: { id: 'pro', name: 'Pro', priceMonthly: 5 },
-  elite: { id: 'elite', name: 'Elite', priceMonthly: 12 },
 }
 
 /**
  * Every premium capability. `minPlan` is the lowest plan that unlocks it;
  * `freePreview` means the free tier gets a limited taste (e.g. the single top
- * captain pick) that drives the upgrade.
+ * captain pick) that drives the upgrade. Pro unlocks the whole catalogue.
  */
 export const FEATURES = {
   'captain-picks': { name: 'AI Captain Picks', minPlan: 'pro', freePreview: true },
@@ -33,31 +33,10 @@ export const FEATURES = {
   'predicted-points': { name: 'Predicted Points', minPlan: 'pro', freePreview: false },
   'price-predictor': { name: 'Price Rise Predictor', minPlan: 'pro', freePreview: false },
   'weekly-briefing': { name: 'Weekly Briefing', minPlan: 'pro', freePreview: true },
-  'team-analyzer': { name: 'Team Analyzer', minPlan: 'elite', freePreview: false },
-  'wildcard-planner': { name: 'Wildcard Planner', minPlan: 'elite', freePreview: false },
-  'chip-strategy': { name: 'Chip Strategy', minPlan: 'elite', freePreview: false },
-  'team-optimizer': { name: 'Team Optimizer', minPlan: 'elite', freePreview: false },
-}
-
-/**
- * Decide which plan a set of sign-in credentials earns.
- *
- * This is the single "who is entitled" seam. Today it recognises access codes
- * (a license/promo key) and a configured list of Pro emails — the stand-in for
- * payment. In production this is replaced by a Stripe subscription lookup; the
- * token issued from the result does not change shape, so nothing downstream
- * moves. An access code is checked first so a paying user can always upgrade an
- * existing account.
- */
-export function planForCredentials(email, code, { proCodes = [], eliteCodes = [], proEmails = [] } = {}) {
-  const normalizedCode = String(code ?? '').trim().toUpperCase()
-  if (normalizedCode && eliteCodes.includes(normalizedCode)) return 'elite'
-  if (normalizedCode && proCodes.includes(normalizedCode)) return 'pro'
-
-  const normalizedEmail = String(email ?? '').trim().toLowerCase()
-  if (normalizedEmail && proEmails.includes(normalizedEmail)) return 'pro'
-
-  return 'free'
+  'team-analyzer': { name: 'Team Analyzer', minPlan: 'pro', freePreview: false },
+  'wildcard-planner': { name: 'Wildcard Planner', minPlan: 'pro', freePreview: false },
+  'chip-strategy': { name: 'Chip Strategy', minPlan: 'pro', freePreview: false },
+  'team-optimizer': { name: 'Team Optimizer', minPlan: 'pro', freePreview: false },
 }
 
 export function isEntitled(plan, featureKey) {

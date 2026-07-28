@@ -5,12 +5,9 @@ export const usesLiveData = dataMode === 'live'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? ''
 
+// PitchIQ is Premier League only — powered end to end by the FPL API.
 export const leagueOptions = [
   { code: 'PL', name: 'Premier League', country: 'England' },
-  { code: 'PD', name: 'La Liga', country: 'Spain' },
-  { code: 'SA', name: 'Serie A', country: 'Italy' },
-  { code: 'BL1', name: 'Bundesliga', country: 'Germany' },
-  { code: 'FL1', name: 'Ligue 1', country: 'France' },
 ]
 
 /** An error that keeps the HTTP status so callers can react to 429 specifically. */

@@ -204,6 +204,7 @@ export function projectPlayer(element, ctx) {
     webName: element.web_name ?? name,
     photoUrl: playerPhotoUrl(element.code),
     position,
+    teamId: element.team,
     team: team?.name ?? 'Unknown',
     teamShort: team?.short_name ?? '—',
     price: toNumber(element.now_cost, 0) / 10,

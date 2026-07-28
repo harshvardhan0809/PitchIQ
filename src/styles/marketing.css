@@ -160,7 +160,7 @@
 .auth-foot a { color: var(--muted); }
 
 /* ---- pricing ---- */
-.price-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; align-items: start; }
+.price-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; align-items: start; max-width: 760px; margin-inline: auto; }
 .price-card { background: var(--panel); border: 1px solid var(--border); border-radius: 18px; padding: 30px; display: flex; flex-direction: column; }
 .price-card.featured { border-color: var(--accent); box-shadow: 0 20px 60px var(--glow); position: relative; }
 .price-badge { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: linear-gradient(140deg, var(--accent), var(--accent-2)); color: #04140b; font-size: .68rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; padding: 5px 13px; border-radius: 999px; }
@@ -194,3 +194,4 @@
 @media (prefers-reduced-motion: reduce) {
   .mkt-btn:hover { transform: none; }
 }
+

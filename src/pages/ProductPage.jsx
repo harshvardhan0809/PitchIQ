@@ -16,17 +16,34 @@ import { PlayerSearch } from '../components/PlayerSearch'
 import { PlayerDashboard } from '../components/PlayerDashboard'
 import { AccountMenu } from '../components/AccountMenu'
 import { useAuth, PLAN_NAMES } from '../lib/auth'
+import { useIsAdmin } from '../hooks/useIsAdmin'
 import '../App.css'
 
-// The intelligence view (and its Supabase auth dependency) is code-split so the
-// free matchday experience keeps a small initial bundle; it loads on demand.
+// The intelligence views are code-split so the free matchday experience keeps a
+// small initial bundle; they load on demand.
 const CaptainPicks = lazy(() => import('../components/intel/CaptainPicks')
   .then((module) => ({ default: module.CaptainPicks })))
+const Differentials = lazy(() => import('../components/intel/Differentials')
+  .then((module) => ({ default: module.Differentials })))
+const SquadAnalyzer = lazy(() => import('../components/intel/SquadAnalyzer')
+  .then((module) => ({ default: module.SquadAnalyzer })))
+const WeeklyBriefing = lazy(() => import('../components/intel/WeeklyBriefing')
+  .then((module) => ({ default: module.WeeklyBriefing })))
 
 const VIEWS = [
   { id: 'matchday', label: 'Matchday' },
+  { id: 'briefing', label: 'Briefing', premium: true },
+  { id: 'squad', label: 'My Team', premium: true },
   { id: 'captain', label: 'Captain AI', premium: true },
+  { id: 'differentials', label: 'Differentials', premium: true },
 ]
+
+const INTEL_VIEWS = {
+  briefing: { Component: WeeklyBriefing, loading: 'Loading Briefing…' },
+  squad: { Component: SquadAnalyzer, loading: 'Loading My Team…' },
+  captain: { Component: CaptainPicks, loading: 'Loading Captain AI…' },
+  differentials: { Component: Differentials, loading: 'Loading Differentials…' },
+}
 
 function Loading({ label }) {
   return (
@@ -53,8 +70,9 @@ function Failure({ error, onRetry }) {
 
 export function ProductPage() {
   const { plan, signedIn } = useAuth()
+  const isAdmin = useIsAdmin()
   const [view, setView] = useState('matchday')
-  const [league, setLeague] = useState('PL')
+  const league = 'PL' // PitchIQ is Premier League only.
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState(null)
   const [reloadToken, setReloadToken] = useState(0)
@@ -72,12 +90,6 @@ export function ProductPage() {
     enabled: Boolean(selectedId),
     refreshKey: reloadToken,
   })
-
-  function handleLeagueChange(code) {
-    setLeague(code)
-    setSelectedId(null)
-    setQuery('')
-  }
 
   function handleSelect(id) {
     setSelectedId(id)
@@ -114,6 +126,7 @@ export function ProductPage() {
             </button>
           ))}
           <Link className="nav-link" to="/pricing">Pricing</Link>
+          {isAdmin && <Link className="nav-link" to="/admin">Admin</Link>}
         </nav>
 
         <span className={`mode-badge ${usesLiveData ? 'live' : ''}`}>
@@ -128,28 +141,19 @@ export function ProductPage() {
       </header>
 
       <main id="main">
-        {view === 'captain' ? (
-          <ErrorBoundary>
-            <Suspense fallback={<Loading label="Loading Captain AI…" />}>
-              <CaptainPicks league="PL" />
-            </Suspense>
-          </ErrorBoundary>
+        {INTEL_VIEWS[view] ? (
+          (() => {
+            const { Component, loading } = INTEL_VIEWS[view]
+            return (
+              <ErrorBoundary>
+                <Suspense fallback={<Loading label={loading} />}>
+                  <Component league="PL" />
+                </Suspense>
+              </ErrorBoundary>
+            )
+          })()
         ) : (
           <>
-            <nav className="league-tabs" aria-label="Competition">
-              {leagueOptions.map((option) => (
-                <button
-                  aria-current={option.code === league ? 'true' : undefined}
-                  className={`league-tab ${option.code === league ? 'active' : ''}`}
-                  key={option.code}
-                  onClick={() => handleLeagueChange(option.code)}
-                  type="button"
-                >
-                  {option.name}
-                </button>
-              ))}
-            </nav>
-
             <div className="search-bar">
               <PlayerSearch
                 competitionName={competitionName}
