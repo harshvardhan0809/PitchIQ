@@ -1,5 +1,5 @@
 import { createServer } from 'node:http'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -137,8 +137,28 @@ async function planOf(request) {
   return user?.plan ?? 'free'
 }
 
-/** Read the raw request body as a string, with a hard size cap. */
+/**
+ * Read the raw request body as a string, with a hard size cap.
+ *
+ * Under a plain Node server the body arrives as an unconsumed stream. Under a
+ * serverless host (Vercel) the runtime may have already buffered and parsed it
+ * onto `request.body` — in which case the stream is spent and listening for
+ * 'data'/'end' would hang. So prefer an already-buffered body when present, and
+ * only fall back to reading the stream. For a pre-parsed object we re-serialise;
+ * that is fine for the JSON POST routes, and the webhook route disables body
+ * parsing (see api/[...path].js) so it still gets the exact bytes it must hash.
+ */
 function readRawBody(request, limit = 16384) {
+  const buffered = request.body
+  if (buffered !== undefined && buffered !== null) {
+    let raw
+    if (typeof buffered === 'string') raw = buffered
+    else if (Buffer.isBuffer(buffered)) raw = buffered.toString('utf8')
+    else raw = JSON.stringify(buffered)
+    if (Buffer.byteLength(raw) > limit) throw new HttpError('Request body too large.', 413)
+    return Promise.resolve(raw)
+  }
+
   return new Promise((resolve, reject) => {
     let raw = ''
     let size = 0
@@ -158,6 +178,11 @@ function readRawBody(request, limit = 16384) {
 
 /** Read a small JSON body from a POST, with a hard size cap. */
 async function readJsonBody(request, limit = 4096) {
+  // A serverless host may hand us the already-parsed object directly.
+  const buffered = request.body
+  if (buffered && typeof buffered === 'object' && !Buffer.isBuffer(buffered)) {
+    return buffered
+  }
   const raw = await readRawBody(request, limit)
   try {
     return raw ? JSON.parse(raw) : {}
@@ -507,7 +532,12 @@ const POST_ROUTES = {
   '/api/profile': handleUpdateProfile,
 }
 
-const server = createServer(async (request, response) => {
+/**
+ * The single request handler for every route. Exported so a serverless host
+ * (Vercel) can invoke it directly with its (req, res); locally it is wrapped in
+ * a long-running node:http server below.
+ */
+export async function handleRequest(request, response) {
   const origin = resolveOrigin(request.headers.origin, allowList)
 
   if (request.method === 'OPTIONS') return preflight(response, origin)
@@ -573,22 +603,38 @@ const server = createServer(async (request, response) => {
     console.error(`Unhandled error on ${url.pathname}:`, error)
     return json(response, 500, { error: 'Something went wrong handling that request.' }, { origin })
   }
-})
+}
 
-server.listen(port, host, () => {
-  console.log(`PitchIQ proxy listening on http://${host}:${port} (build ${SERVER_BUILD})`)
-  console.log(allowList.length > 0 ? `CORS restricted to: ${allowList.join(', ')}` : 'CORS open (set ALLOWED_ORIGINS to restrict)')
-  if (!footballData.configured) {
-    console.warn('Warning: FOOTBALL_DATA_API_KEY is not set. Live competition endpoints will return 503.')
+/** True only when this file is the process entry point (local `npm run api`). */
+function isEntryPoint() {
+  try {
+    return Boolean(process.argv[1])
+      && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))
+  } catch {
+    return false
   }
-  if (!supabaseAuth.configured) {
-    console.warn('Warning: SUPABASE_URL / SUPABASE_ANON_KEY are not set. Accounts are disabled and every request is treated as the free tier.')
-  } else if (!supabaseAuth.canManage) {
-    console.warn('Warning: SUPABASE_SERVICE_ROLE_KEY is not set. Sign-in works, but plan upgrades will fail until it is provided.')
-  }
-  if (!razorpay.configured) {
-    console.warn('Warning: RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET / RAZORPAY_PLAN_ID are not set. Card & UPI checkout is disabled; grant Pro from the /admin console until they are provided.')
-  } else if (!razorpay.webhookReady) {
-    console.warn('Warning: RAZORPAY_WEBHOOK_SECRET is not set. Checkout can open, but subscriptions will not activate Pro until the webhook secret is provided.')
-  }
-})
+}
+
+// Local development: wrap the handler in a long-running server. On a serverless
+// host the file is imported (not the entry point), so nothing listens — the
+// platform calls handleRequest per request instead.
+if (isEntryPoint()) {
+  const server = createServer(handleRequest)
+  server.listen(port, host, () => {
+    console.log(`PitchIQ proxy listening on http://${host}:${port} (build ${SERVER_BUILD})`)
+    console.log(allowList.length > 0 ? `CORS restricted to: ${allowList.join(', ')}` : 'CORS open (set ALLOWED_ORIGINS to restrict)')
+    if (!footballData.configured) {
+      console.warn('Warning: FOOTBALL_DATA_API_KEY is not set. Live competition endpoints will return 503.')
+    }
+    if (!supabaseAuth.configured) {
+      console.warn('Warning: SUPABASE_URL / SUPABASE_ANON_KEY are not set. Accounts are disabled and every request is treated as the free tier.')
+    } else if (!supabaseAuth.canManage) {
+      console.warn('Warning: SUPABASE_SERVICE_ROLE_KEY is not set. Sign-in works, but plan upgrades will fail until it is provided.')
+    }
+    if (!razorpay.configured) {
+      console.warn('Warning: RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET / RAZORPAY_PLAN_ID are not set. Card & UPI checkout is disabled; grant Pro from the /admin console until they are provided.')
+    } else if (!razorpay.webhookReady) {
+      console.warn('Warning: RAZORPAY_WEBHOOK_SECRET is not set. Checkout can open, but subscriptions will not activate Pro until the webhook secret is provided.')
+    }
+  })
+}
