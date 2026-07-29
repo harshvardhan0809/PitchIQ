@@ -29,10 +29,13 @@ const SquadAnalyzer = lazy(() => import('../components/intel/SquadAnalyzer')
   .then((module) => ({ default: module.SquadAnalyzer })))
 const WeeklyBriefing = lazy(() => import('../components/intel/WeeklyBriefing')
   .then((module) => ({ default: module.WeeklyBriefing })))
+const PriceWatch = lazy(() => import('../components/intel/PriceWatch')
+  .then((module) => ({ default: module.PriceWatch })))
 
 const VIEWS = [
   { id: 'matchday', label: 'Matchday' },
   { id: 'briefing', label: 'Briefing', premium: true },
+  { id: 'prices', label: 'Price Watch', premium: true },
   { id: 'squad', label: 'My Team', premium: true },
   { id: 'captain', label: 'Captain AI', premium: true },
   { id: 'differentials', label: 'Differentials', premium: true },
@@ -40,6 +43,7 @@ const VIEWS = [
 
 const INTEL_VIEWS = {
   briefing: { Component: WeeklyBriefing, loading: 'Loading Briefing…' },
+  prices: { Component: PriceWatch, loading: 'Loading Price Watch…' },
   squad: { Component: SquadAnalyzer, loading: 'Loading My Team…' },
   captain: { Component: CaptainPicks, loading: 'Loading Captain AI…' },
   differentials: { Component: Differentials, loading: 'Loading Differentials…' },

@@ -1,6 +1,6 @@
 import { getPlan, getFreshAccessToken } from '../lib/auth'
 import { ApiError, usesLiveData } from './footballApi'
-import { demoCaptainBoard, demoDifferentials, demoSquad, demoBriefing } from '../data/demoIntelligence'
+import { demoCaptainBoard, demoDifferentials, demoSquad, demoBriefing, demoPriceWatch } from '../data/demoIntelligence'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? ''
 
@@ -46,6 +46,10 @@ export function fetchDifferentials(league = 'PL') {
 
 export function fetchBriefing(league = 'PL') {
   return fetchBoard(`/api/intel/briefing?league=${encodeURIComponent(league)}`, demoBriefing)
+}
+
+export function fetchPriceWatch(league = 'PL') {
+  return fetchBoard(`/api/intel/prices?league=${encodeURIComponent(league)}`, demoPriceWatch)
 }
 
 /**

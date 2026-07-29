@@ -137,6 +137,65 @@ export function demoBriefing(plan = 'free') {
   }
 }
 
+// Price Change Predictor: sample risers/fallers so the view and its paywall are
+// explorable offline. Mirrors the /api/intel/prices shape and its free/pro gate.
+function priceItem(webName, teamShort, position, price, ownership, net, confidence, likelihood, changedThisGw = 0) {
+  return {
+    id: `demo:pw:${webName}`,
+    elementId: 0,
+    name: webName,
+    webName,
+    photoUrl: null,
+    position,
+    team: teamShort,
+    teamShort,
+    teamCrestUrl: null,
+    price,
+    ownership,
+    transfersIn: net > 0 ? net + 8000 : 6000,
+    transfersOut: net > 0 ? 8000 : Math.abs(net) + 6000,
+    netTransfers: net,
+    momentum: Number(((net / 9_400_000) * 100).toFixed(3)),
+    direction: net >= 0 ? 'rise' : 'fall',
+    confidence,
+    likelihood,
+    changedThisGw,
+  }
+}
+
+const PW_RISERS = [
+  priceItem('Palmer', 'CHE', 'MID', 6.4, 41.2, 214000, 99, 'Very likely'),
+  priceItem('Mbeumo', 'MUN', 'MID', 7.1, 24.8, 132000, 82, 'Very likely'),
+  priceItem('Gordon', 'NEW', 'MID', 6.3, 15.1, 61000, 64, 'Likely'),
+  priceItem('Wood', 'NFO', 'FWD', 7.0, 19.6, 44000, 47, 'Possible'),
+  priceItem('Rogers', 'AVL', 'MID', 5.6, 9.2, 38000, 41, 'Possible'),
+  priceItem('Mateta', 'CRY', 'FWD', 7.4, 12.3, 29000, 33, 'Possible'),
+]
+
+const PW_FALLERS = [
+  priceItem('Núñez', 'LIV', 'FWD', 7.4, 11.8, -158000, 96, 'Very likely'),
+  priceItem('Havertz', 'ARS', 'FWD', 7.9, 18.4, -97000, 78, 'Likely'),
+  priceItem('Sels', 'NFO', 'GKP', 5.2, 22.1, -54000, 58, 'Likely', -0.1),
+  priceItem('Kluivert', 'BOU', 'MID', 6.1, 8.7, -33000, 36, 'Possible'),
+  priceItem('Muniz', 'FUL', 'FWD', 6.3, 6.4, -24000, 29, 'Watch'),
+]
+
+export function demoPriceWatch(plan = 'free') {
+  const unlocked = plan !== 'free'
+  const FREE_PER_SIDE = 3
+  const hidden = Math.max(0, PW_RISERS.length - FREE_PER_SIDE) + Math.max(0, PW_FALLERS.length - FREE_PER_SIDE)
+  return {
+    ...DEMO_META,
+    generatedAt: new Date().toISOString(),
+    feature: 'price-predictor', featureName: 'Price Rise Predictor', requiredPlan: 'pro', plan,
+    totalManagers: 9_400_000,
+    locked: !unlocked,
+    risers: unlocked ? PW_RISERS : PW_RISERS.slice(0, FREE_PER_SIDE),
+    fallers: unlocked ? PW_FALLERS : PW_FALLERS.slice(0, FREE_PER_SIDE),
+    lockedCount: unlocked ? 0 : hidden,
+  }
+}
+
 /**
  * Offline squad analysis. A plausible 15-man team so the "My Team" view and its
  * Pro paywall are explorable with no FPL account and no network.

@@ -20,6 +20,7 @@ import { getCaptainBoard } from './lib/intelligence/captains.js'
 import { getDifferentials } from './lib/intelligence/differentials.js'
 import { getBriefing } from './lib/intelligence/briefing.js'
 import { getSquadAnalysis } from './lib/intelligence/squad.js'
+import { getPriceWatch } from './lib/intelligence/priceWatch.js'
 import { parseEntryId } from './lib/providers/fpl.js'
 import { RazorpayClient } from './lib/providers/razorpay.js'
 import { featureMeta, isEntitled, PLAN_ORDER } from './lib/entitlements.js'
@@ -52,7 +53,7 @@ loadEnvFile()
 
 // Identifies the running code so a stale `node server/index.js` is detectable
 // at /api/health and in the startup log. Bump on behaviour changes.
-const SERVER_BUILD = '2026-07-27-subscriptions-tables'
+const SERVER_BUILD = '2026-07-29-price-watch'
 
 const port = Number(process.env.PORT ?? process.env.API_PORT ?? 3001)
 const host = process.env.API_HOST ?? '0.0.0.0'
@@ -388,6 +389,40 @@ function gateBriefing(result, plan) {
   }
 }
 
+/**
+ * Price Watch gates by count, not by hiding a hero: the free tier sees the top
+ * few risers and fallers (the daily-habit hook), while Pro sees the full boards.
+ */
+function gatePriceWatch(result, plan) {
+  const meta = featureMeta('price-predictor')
+  const unlocked = isEntitled(plan, 'price-predictor')
+  const FREE_PER_SIDE = 3
+  const base = {
+    feature: meta.key,
+    featureName: meta.name,
+    requiredPlan: meta.requiredPlan,
+    plan,
+    gameweek: result.gameweek,
+    gameweekName: result.gameweekName,
+    deadline: result.deadline,
+    phase: result.phase,
+    generatedAt: result.generatedAt,
+    totalManagers: result.totalManagers,
+  }
+  if (unlocked) {
+    return { ...base, locked: false, risers: result.risers, fallers: result.fallers, lockedCount: 0 }
+  }
+  const hidden = Math.max(0, result.risers.length - FREE_PER_SIDE)
+    + Math.max(0, result.fallers.length - FREE_PER_SIDE)
+  return {
+    ...base,
+    locked: true,
+    risers: result.risers.slice(0, FREE_PER_SIDE),
+    fallers: result.fallers.slice(0, FREE_PER_SIDE),
+    lockedCount: hidden,
+  }
+}
+
 const routes = [
   {
     pattern: /^\/api\/health$/,
@@ -477,6 +512,22 @@ const routes = [
       const plan = await planOf(request)
       const result = await getBriefing({ fpl })
       return gateBriefing(result, plan)
+    },
+  },
+  {
+    // Price Change Predictor — tonight's likely risers and fallers from live
+    // transfer momentum. Premium with a free preview of the top few each way.
+    // No-store because the payload is gated to the caller's plan.
+    pattern: /^\/api\/intel\/prices$/,
+    cacheControl: 'no-store',
+    handle: async (_match, url, request) => {
+      const competition = getCompetition(url.searchParams.get('league') ?? defaultCompetition)
+      if (!competition.supportsFpl) {
+        throw new HttpError('The Price Change Predictor is available for the Premier League only.', 400)
+      }
+      const plan = await planOf(request)
+      const result = await getPriceWatch({ fpl, limit: 15 })
+      return gatePriceWatch(result, plan)
     },
   },
   {
