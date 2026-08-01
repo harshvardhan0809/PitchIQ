@@ -4,6 +4,7 @@ import { useAsync } from '../../hooks/useAsync'
 import { PLAN_LABELS } from '../../lib/plan'
 import { useAuth } from '../../lib/auth'
 import { fetchPriceWatch } from '../../services/intelligenceApi'
+import { PlayerLink } from '../PlayerLink'
 import '../../styles/intel.css'
 
 /**
@@ -27,7 +28,7 @@ function PriceRow({ item, direction }) {
       <Face item={item} />
       <div className="pw-id">
         <div className="pw-name">
-          {item.webName}
+          <PlayerLink id={item.id}>{item.webName}</PlayerLink>
           {item.changedThisGw !== 0 && (
             <span className="pw-changed">{item.changedThisGw > 0 ? '▲' : '▼'} £{Math.abs(item.changedThisGw).toFixed(1)} today</span>
           )}

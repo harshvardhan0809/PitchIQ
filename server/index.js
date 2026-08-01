@@ -21,6 +21,8 @@ import { getDifferentials } from './lib/intelligence/differentials.js'
 import { getBriefing } from './lib/intelligence/briefing.js'
 import { getSquadAnalysis } from './lib/intelligence/squad.js'
 import { getPriceWatch } from './lib/intelligence/priceWatch.js'
+import { getLeagueWarRoom } from './lib/intelligence/league.js'
+import { parseLeagueId } from './lib/providers/fpl.js'
 import { parseEntryId } from './lib/providers/fpl.js'
 import { RazorpayClient } from './lib/providers/razorpay.js'
 import { featureMeta, isEntitled, PLAN_ORDER } from './lib/entitlements.js'
@@ -53,7 +55,7 @@ loadEnvFile()
 
 // Identifies the running code so a stale `node server/index.js` is detectable
 // at /api/health and in the startup log. Bump on behaviour changes.
-const SERVER_BUILD = '2026-07-29-price-watch'
+const SERVER_BUILD = '2026-07-29-war-room'
 
 const port = Number(process.env.PORT ?? process.env.API_PORT ?? 3001)
 const host = process.env.API_HOST ?? '0.0.0.0'
@@ -423,6 +425,51 @@ function gatePriceWatch(result, plan) {
   }
 }
 
+/**
+ * War Room gates the strategy layer: everyone sees the standings table and their
+ * exact gap to overtake (the free, shareable hook), while the rival captains,
+ * league template and your differentials — the competitive edge — are Pro. The
+ * deep intel is only computed for Pro callers (see the route), so free requests
+ * stay a single cheap standings fetch.
+ */
+function gateLeague(result, plan) {
+  const meta = featureMeta('mini-league')
+  const unlocked = isEntitled(plan, 'mini-league')
+  const base = {
+    feature: meta.key,
+    featureName: meta.name,
+    requiredPlan: meta.requiredPlan,
+    plan,
+    gameweek: result.gameweek,
+    gameweekName: result.gameweekName,
+    deadline: result.deadline,
+    phase: result.phase,
+    generatedAt: result.generatedAt,
+    league: result.league,
+    event: result.event,
+    you: result.you,
+    standings: result.standings,
+  }
+  if (unlocked) {
+    return {
+      ...base,
+      locked: false,
+      captains: result.captains,
+      template: result.template,
+      yourDifferentials: result.yourDifferentials,
+      deepCount: result.deepCount,
+    }
+  }
+  return {
+    ...base,
+    locked: true,
+    captains: [],
+    template: [],
+    yourDifferentials: [],
+    lockedCount: Math.min(12, result.standings.length),
+  }
+}
+
 const routes = [
   {
     pattern: /^\/api\/health$/,
@@ -528,6 +575,26 @@ const routes = [
       const plan = await planOf(request)
       const result = await getPriceWatch({ fpl, limit: 15 })
       return gatePriceWatch(result, plan)
+    },
+  },
+  {
+    // Mini-League War Room — standings + your gap to overtake (free), plus rival
+    // captains, the league template and your differentials (Pro). PL-only,
+    // no-store because the payload is gated to the caller's plan.
+    pattern: /^\/api\/intel\/league$/,
+    cacheControl: 'no-store',
+    handle: async (_match, url, request) => {
+      const competition = getCompetition(url.searchParams.get('league') ?? defaultCompetition)
+      if (!competition.supportsFpl) {
+        throw new HttpError('The Mini-League War Room is available for the Premier League only.', 400)
+      }
+      const leagueId = parseLeagueId(url.searchParams.get('id'))
+      const entryParam = url.searchParams.get('entry')
+      const entryId = entryParam ? parseEntryId(entryParam) : null
+      const plan = await planOf(request)
+      const deep = isEntitled(plan, 'mini-league')
+      const result = await getLeagueWarRoom({ fpl, leagueId, entryId, deep })
+      return gateLeague(result, plan)
     },
   },
   {

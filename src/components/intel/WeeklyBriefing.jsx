@@ -4,6 +4,7 @@ import { useAsync } from '../../hooks/useAsync'
 import { PLAN_LABELS } from '../../lib/plan'
 import { useAuth } from '../../lib/auth'
 import { fetchBriefing } from '../../services/intelligenceApi'
+import { PlayerLink } from '../PlayerLink'
 import '../../styles/intel.css'
 
 /**
@@ -31,7 +32,7 @@ function Section({ section, index }) {
         <div className="brief-player">
           <Face player={player} />
           <div className="brief-player-id">
-            <span className="brief-player-name">{player.webName ?? player.name}</span>
+            <span className="brief-player-name"><PlayerLink id={player.id}>{player.webName ?? player.name}</PlayerLink></span>
             <span className="brief-player-meta">
               {player.position} · {player.teamShort}
               {player.price ? ` · £${player.price.toFixed(1)}` : ''}

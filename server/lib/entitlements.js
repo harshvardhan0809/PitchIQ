@@ -32,6 +32,7 @@ export const FEATURES = {
   differentials: { name: 'Differential Finder', minPlan: 'pro', freePreview: true },
   'predicted-points': { name: 'Predicted Points', minPlan: 'pro', freePreview: false },
   'price-predictor': { name: 'Price Rise Predictor', minPlan: 'pro', freePreview: true },
+  'mini-league': { name: 'Mini-League War Room', minPlan: 'pro', freePreview: true },
   'weekly-briefing': { name: 'Weekly Briefing', minPlan: 'pro', freePreview: true },
   'team-analyzer': { name: 'Team Analyzer', minPlan: 'pro', freePreview: false },
   'wildcard-planner': { name: 'Wildcard Planner', minPlan: 'pro', freePreview: false },

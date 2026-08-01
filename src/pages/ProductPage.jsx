@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom'
 
 import {
   fetchSpotlight,
-  getPlayerDashboard,
   leagueOptions,
   searchPlayers,
   usesLiveData,
@@ -13,10 +12,10 @@ import { ErrorBoundary } from '../components/ErrorBoundary'
 import { MatchdayPanel } from '../components/MatchdayPanel'
 import { PlayersToWatch } from '../components/PlayersToWatch'
 import { PlayerSearch } from '../components/PlayerSearch'
-import { PlayerDashboard } from '../components/PlayerDashboard'
 import { AccountMenu } from '../components/AccountMenu'
 import { useAuth, PLAN_NAMES } from '../lib/auth'
 import { useIsAdmin } from '../hooks/useIsAdmin'
+import { PlayerViewProvider, usePlayerView } from '../lib/playerView'
 import '../App.css'
 
 // The intelligence views are code-split so the free matchday experience keeps a
@@ -31,11 +30,14 @@ const WeeklyBriefing = lazy(() => import('../components/intel/WeeklyBriefing')
   .then((module) => ({ default: module.WeeklyBriefing })))
 const PriceWatch = lazy(() => import('../components/intel/PriceWatch')
   .then((module) => ({ default: module.PriceWatch })))
+const LeagueWarRoom = lazy(() => import('../components/intel/LeagueWarRoom')
+  .then((module) => ({ default: module.LeagueWarRoom })))
 
 const VIEWS = [
   { id: 'matchday', label: 'Matchday' },
   { id: 'briefing', label: 'Briefing', premium: true },
   { id: 'prices', label: 'Price Watch', premium: true },
+  { id: 'league', label: 'War Room', premium: true },
   { id: 'squad', label: 'My Team', premium: true },
   { id: 'captain', label: 'Captain AI', premium: true },
   { id: 'differentials', label: 'Differentials', premium: true },
@@ -44,6 +46,7 @@ const VIEWS = [
 const INTEL_VIEWS = {
   briefing: { Component: WeeklyBriefing, loading: 'Loading Briefing…' },
   prices: { Component: PriceWatch, loading: 'Loading Price Watch…' },
+  league: { Component: LeagueWarRoom, loading: 'Loading War Room…' },
   squad: { Component: SquadAnalyzer, loading: 'Loading My Team…' },
   captain: { Component: CaptainPicks, loading: 'Loading Captain AI…' },
   differentials: { Component: Differentials, loading: 'Loading Differentials…' },
@@ -72,13 +75,24 @@ function Failure({ error, onRetry }) {
   )
 }
 
+// The provider makes the player report reachable from every view; the body reads
+// its opener so search results, matchday and the intel boards all share one
+// dashboard overlay.
 export function ProductPage() {
+  return (
+    <PlayerViewProvider>
+      <ProductBody />
+    </PlayerViewProvider>
+  )
+}
+
+function ProductBody() {
+  const { openPlayer } = usePlayerView()
   const { plan, signedIn } = useAuth()
   const isAdmin = useIsAdmin()
   const [view, setView] = useState('matchday')
   const league = 'PL' // PitchIQ is Premier League only.
   const [query, setQuery] = useState('')
-  const [selectedId, setSelectedId] = useState(null)
   const [reloadToken, setReloadToken] = useState(0)
   const debouncedQuery = useDebounced(query)
 
@@ -90,15 +104,9 @@ export function ProductPage() {
     enabled: debouncedQuery.trim().length > 0,
   })
 
-  const dashboard = useAsync(getPlayerDashboard, [selectedId, league], {
-    enabled: Boolean(selectedId),
-    refreshKey: reloadToken,
-  })
-
   function handleSelect(id) {
-    setSelectedId(id)
     setQuery('')
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    openPlayer(id)
   }
 
   const competitionName = spotlight.data?.competition?.name
@@ -165,35 +173,23 @@ export function ProductPage() {
                 onSelect={handleSelect}
                 query={query}
                 results={results}
-                selectedId={selectedId}
+                selectedId={null}
               />
             </div>
 
             <ErrorBoundary>
-              {selectedId ? (
+              {spotlight.status === 'loading' && <Loading label={`Loading ${competitionName}…`} />}
+              {spotlight.status === 'error' && <Failure error={spotlight.error} onRetry={retry} />}
+              {spotlight.status === 'ready' && spotlight.data && (
                 <>
-                  {dashboard.status === 'loading' && <Loading label="Loading player report…" />}
-                  {dashboard.status === 'error' && <Failure error={dashboard.error} onRetry={retry} />}
-                  {dashboard.status === 'ready' && dashboard.data && (
-                    <PlayerDashboard dashboard={dashboard.data} onBack={() => setSelectedId(null)} />
-                  )}
-                </>
-              ) : (
-                <>
-                  {spotlight.status === 'loading' && <Loading label={`Loading ${competitionName}…`} />}
-                  {spotlight.status === 'error' && <Failure error={spotlight.error} onRetry={retry} />}
-                  {spotlight.status === 'ready' && spotlight.data && (
-                    <>
-                      <MatchdayPanel
-                        competitionName={spotlight.data.competition.name}
-                        matches={spotlight.data.matches}
-                      />
-                      <PlayersToWatch
-                        onSelect={handleSelect}
-                        playersToWatch={spotlight.data.playersToWatch}
-                      />
-                    </>
-                  )}
+                  <MatchdayPanel
+                    competitionName={spotlight.data.competition.name}
+                    matches={spotlight.data.matches}
+                  />
+                  <PlayersToWatch
+                    onSelect={handleSelect}
+                    playersToWatch={spotlight.data.playersToWatch}
+                  />
                 </>
               )}
             </ErrorBoundary>

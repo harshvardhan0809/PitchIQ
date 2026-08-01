@@ -196,6 +196,75 @@ export function demoPriceWatch(plan = 'free') {
   }
 }
 
+// Mini-League War Room: a plausible 10-team classic league so the standings,
+// overtake math and the Pro strategy layer are explorable offline.
+function standingRow(rank, lastRank, entryId, teamName, managerName, total, eventTotal, captain, isYou = false) {
+  const movement = !lastRank ? 'same' : rank < lastRank ? 'up' : rank > lastRank ? 'down' : 'same'
+  return { rank, lastRank, movement, entryId, teamName, managerName, total, eventTotal, isYou, captain }
+}
+
+const cap = (webName, teamShort, position = 'MID') => ({ webName, teamShort, position })
+
+const WR_STANDINGS = [
+  standingRow(1, 2, 100, 'Kloppites', 'Raj Mehta', 1284, 62, cap('Haaland', 'MCI', 'FWD')),
+  standingRow(2, 1, 200, 'Your FC', 'You', 1271, 58, cap('Palmer', 'CHE'), true),
+  standingRow(3, 3, 300, 'Sam United', 'Sam Byrne', 1240, 44, cap('Haaland', 'MCI', 'FWD')),
+  standingRow(4, 6, 400, 'Ctrl Alt Defeat', 'Priya N', 1226, 71, cap('Haaland', 'MCI', 'FWD')),
+  standingRow(5, 4, 500, 'Xhaka Khan', 'Dev P', 1219, 50, cap('Saka', 'ARS')),
+  standingRow(6, 5, 600, 'Bench Warmers', 'Amir K', 1205, 47, cap('Haaland', 'MCI', 'FWD')),
+  standingRow(7, 7, 700, 'Salah Good', 'Nina R', 1188, 41, cap('Isak', 'NEW', 'FWD')),
+  standingRow(8, 9, 800, 'Toney Baloney', 'Leo M', 1170, 55, cap('Palmer', 'CHE')),
+  standingRow(9, 8, 900, 'Son of Anarchy', 'Kate L', 1155, 39, cap('Haaland', 'MCI', 'FWD')),
+  standingRow(10, 10, 1000, 'Vardy Party', 'Omar S', 1131, 43, cap('Saka', 'ARS')),
+]
+
+const WR_CAPTAINS = [
+  { ...cap('Haaland', 'MCI', 'FWD'), count: 5, pct: 50 },
+  { ...cap('Palmer', 'CHE'), count: 2, pct: 20 },
+  { ...cap('Saka', 'ARS'), count: 2, pct: 20 },
+  { ...cap('Isak', 'NEW', 'FWD'), count: 1, pct: 10 },
+]
+
+const WR_TEMPLATE = [
+  { ...cap('Saka', 'ARS'), count: 9, pct: 90 },
+  { ...cap('Haaland', 'MCI', 'FWD'), count: 8, pct: 80 },
+  { ...cap('Palmer', 'CHE'), count: 6, pct: 60 },
+  { ...cap('Gabriel', 'ARS', 'DEF'), count: 5, pct: 50 },
+  { ...cap('Mbeumo', 'MUN'), count: 4, pct: 40 },
+  { ...cap('Isak', 'NEW', 'FWD'), count: 4, pct: 40 },
+]
+
+const WR_DIFFERENTIALS = [
+  { ...cap('Gibbs-White', 'NFO'), owners: 1 },
+  { ...cap('Rogers', 'AVL'), owners: 2 },
+]
+
+export function demoLeague(plan = 'free') {
+  const unlocked = plan !== 'free'
+  const you = WR_STANDINGS.find((row) => row.isYou)
+  const above = WR_STANDINGS.find((row) => row.rank === you.rank - 1)
+  const leader = WR_STANDINGS.find((row) => row.rank === 1)
+  return {
+    ...DEMO_META,
+    generatedAt: new Date().toISOString(),
+    feature: 'mini-league', featureName: 'Mini-League War Room', requiredPlan: 'pro', plan,
+    league: { id: 123456, name: 'The Office FPL', size: WR_STANDINGS.length, hasNext: false },
+    event: { id: 12, name: 'Gameweek 12', finished: true },
+    you: {
+      rank: you.rank, total: you.total, eventTotal: you.eventTotal, teamName: you.teamName,
+      toOvertake: { points: (above.total - you.total) + 1, targetName: above.teamName },
+      leaderGap: leader.total - you.total,
+    },
+    standings: unlocked ? WR_STANDINGS : WR_STANDINGS.map((row) => ({ ...row, captain: null })),
+    locked: !unlocked,
+    captains: unlocked ? WR_CAPTAINS : [],
+    template: unlocked ? WR_TEMPLATE : [],
+    yourDifferentials: unlocked ? WR_DIFFERENTIALS : [],
+    deepCount: unlocked ? WR_STANDINGS.length : 0,
+    lockedCount: unlocked ? 0 : WR_STANDINGS.length,
+  }
+}
+
 /**
  * Offline squad analysis. A plausible 15-man team so the "My Team" view and its
  * Pro paywall are explorable with no FPL account and no network.

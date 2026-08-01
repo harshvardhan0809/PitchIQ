@@ -1,6 +1,6 @@
 import { getPlan, getFreshAccessToken } from '../lib/auth'
 import { ApiError, usesLiveData } from './footballApi'
-import { demoCaptainBoard, demoDifferentials, demoSquad, demoBriefing, demoPriceWatch } from '../data/demoIntelligence'
+import { demoCaptainBoard, demoDifferentials, demoSquad, demoBriefing, demoPriceWatch, demoLeague } from '../data/demoIntelligence'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? ''
 
@@ -50,6 +50,22 @@ export function fetchBriefing(league = 'PL') {
 
 export function fetchPriceWatch(league = 'PL') {
   return fetchBoard(`/api/intel/prices?league=${encodeURIComponent(league)}`, demoPriceWatch)
+}
+
+/**
+ * Mini-League War Room. Keyed by a classic league ID; the optional `entry` (the
+ * caller's own FPL team ID) lets the server highlight their row and compute the
+ * exact gap to overtake. In demo mode a bundled league stands in for any id.
+ */
+export function fetchLeague(leagueId, entryId = '', league = 'PL') {
+  const id = String(leagueId ?? '').trim()
+  if (!id) return Promise.reject(new ApiError('Enter your league ID to open the War Room.', 400))
+  if (!usesLiveData) return delay(demoLeague(getPlan()))
+
+  const entry = String(entryId ?? '').trim()
+  const params = new URLSearchParams({ id, league })
+  if (entry) params.set('entry', entry)
+  return fetchBoard(`/api/intel/league?${params.toString()}`, () => demoLeague(getPlan()))
 }
 
 /**

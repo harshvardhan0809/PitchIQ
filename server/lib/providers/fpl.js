@@ -65,6 +65,23 @@ export class FplClient {
   getEntryPicks(entryId, event) {
     return this.request(`entry/${entryId}/event/${event}/picks/`, 5 * MINUTE)
   }
+
+  /** A classic mini-league's standings (page 1 = top 50). Public, no auth. */
+  getLeagueStandings(leagueId, page = 1) {
+    return this.request(`leagues-classic/${leagueId}/standings/?page_standings=${page}`, 2 * MINUTE)
+  }
+}
+
+/**
+ * Classic league IDs are the digits in the league URL. Validate before it hits
+ * the upstream path so a malformed id fails fast rather than as an opaque 404.
+ */
+export function parseLeagueId(value) {
+  const digits = String(value ?? '').trim()
+  if (!/^\d{1,12}$/.test(digits)) {
+    throw new HttpError('Enter your league ID — the number in the league’s URL.', 400)
+  }
+  return Number(digits)
 }
 
 /**

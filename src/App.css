@@ -757,3 +757,85 @@ footer p { margin: 0; }
 @media (prefers-reduced-motion: reduce) {
   .live-dot, .spinner { animation: none; }
 }
+
+/* ---- Clickable player names (open the stats report from anywhere) ---- */
+.player-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+  text-align: inherit;
+  cursor: pointer;
+  border-radius: 3px;
+}
+.player-link:hover,
+.player-link:focus-visible {
+  color: var(--green);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.player-link:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+
+/* ---- Player report overlay ---- */
+.player-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: max(16px, 4vh) 16px;
+  overflow-y: auto;
+  animation: player-modal-in 0.16s ease-out;
+}
+.player-modal {
+  position: relative;
+  width: 100%;
+  max-width: 1120px;
+  background: var(--page);
+  border: 1px solid var(--line-strong);
+  border-radius: 18px;
+  padding: 20px clamp(16px, 3vw, 32px) 32px;
+  box-shadow: var(--shadow);
+}
+.player-modal-close {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  z-index: 2;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--tile);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+.player-modal-close:hover { border-color: var(--line-strong); color: var(--green); }
+.player-modal-state {
+  padding: 64px 20px;
+  text-align: center;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+.player-modal .player-view { margin: 0; }
+
+@keyframes player-modal-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .player-modal-backdrop { animation: none; }
+}
