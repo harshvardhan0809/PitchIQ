@@ -13,6 +13,7 @@ import { MatchdayPanel } from '../components/MatchdayPanel'
 import { PlayersToWatch } from '../components/PlayersToWatch'
 import { PlayerSearch } from '../components/PlayerSearch'
 import { AccountMenu } from '../components/AccountMenu'
+import { ProUpsell } from '../components/ProUpsell'
 import { useAuth, PLAN_NAMES } from '../lib/auth'
 import { useIsAdmin } from '../hooks/useIsAdmin'
 import { PlayerViewProvider } from '../lib/playerView'
@@ -206,6 +207,8 @@ function ProductBody() {
         </p>
         <p className="muted">Form estimates are calculated locally and are not betting advice.</p>
       </footer>
+
+      <ProUpsell />
     </div>
   )
 }

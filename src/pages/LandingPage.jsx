@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom'
 import { MarketingNav, MarketingFooter } from '../components/MarketingNav'
+import { MockCaptainCard } from '../components/MockCaptainCard'
+import { Reveal } from '../components/Reveal'
 import '../styles/marketing.css'
 
 const FEATURES = [
@@ -39,72 +41,53 @@ export function LandingPage() {
           </div>
 
           <div className="hero-visual">
-            <div className="mock-card">
-              <p className="mock-tag">★ Top armband · Gameweek 1</p>
-              <div className="mock-player">
-                <span className="mock-face">EH</span>
-                <div>
-                  <strong>Erling Haaland</strong>
-                  <span>Man City · FWD · £15.0</span>
-                </div>
-              </div>
-              <div className="mock-scores">
-                <div className="mock-score"><div className="v">6.8</div><div className="l">xPts</div></div>
-                <div className="mock-score"><div className="v">92%</div><div className="l">Confidence</div></div>
-                <div className="mock-score"><div className="v">9.1</div><div className="l">Captain score</div></div>
-              </div>
-              <ul className="mock-reasons">
-                <li>Home vs Bournemouth — favourable fixture (2/5)</li>
-                <li>0.94 expected goal involvements per 90</li>
-                <li>Nailed starter — 33 starts last season</li>
-              </ul>
-            </div>
+            <MockCaptainCard animate />
           </div>
         </section>
 
         <section className="mkt-section">
-          <div className="mkt-section-head">
+          <Reveal className="mkt-section-head">
             <p className="mkt-kicker">What you get</p>
             <h2>Answers, not spreadsheets</h2>
             <p>Every screen answers one question: what should I do with my team this week?</p>
-          </div>
+          </Reveal>
           <div className="feature-grid">
-            {FEATURES.map((feature) => (
-              <div className="feature" key={feature.title}>
+            {FEATURES.map((feature, index) => (
+              <Reveal className="feature" key={feature.title} delay={index * 70}>
                 <div className="feature-ic" aria-hidden="true">{feature.icon}</div>
                 <h3>{feature.title}</h3>
                 <p>{feature.body}</p>
                 {!feature.live && <span className="soon">Coming soon</span>}
-              </div>
+              </Reveal>
             ))}
           </div>
         </section>
 
         <section className="mkt-section">
-          <div className="mkt-section-head">
+          <Reveal className="mkt-section-head">
             <p className="mkt-kicker">How it works</p>
             <h2>From data to decision in three steps</h2>
-          </div>
+          </Reveal>
           <div className="steps">
             {STEPS.map((step, index) => (
-              <div className="step" key={step.title}>
+              <Reveal className="step" key={step.title} delay={index * 90}>
                 <div className="step-n">0{index + 1}</div>
                 <h3>{step.title}</h3>
                 <p>{step.body}</p>
-              </div>
+              </Reveal>
             ))}
           </div>
         </section>
 
         <section className="mkt-section">
-          <div className="cta-band">
+          <Reveal className="cta-band">
             <h2>Win your league this season</h2>
             <p>Start free in seconds. Upgrade to Pro when you want the full edge.</p>
             <div className="hero-cta" style={{ justifyContent: 'center' }}>
               <Link className="mkt-btn mkt-btn-primary" to="/login?mode=signup">Create free account</Link>
               <Link className="mkt-btn mkt-btn-ghost" to="/pricing">See plans</Link>
             </div>
-          </div>
+          </Reveal>
         </section>
 
         <MarketingFooter />

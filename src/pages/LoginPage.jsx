@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
+import { MockCaptainCard } from '../components/MockCaptainCard'
 import '../styles/marketing.css'
 
 export function LoginPage() {
@@ -48,7 +49,28 @@ export function LoginPage() {
 
   return (
     <div className="mkt">
-      <div className="auth-shell">
+      <div className="auth-shell auth-split">
+        <aside className="auth-aside">
+          <Link className="mkt-brand auth-aside-brand" to="/">
+            <span className="mkt-mark">P</span>
+            <strong>PitchIQ</strong>
+          </Link>
+          <h2 className="auth-aside-title">
+            Stop guessing. <span className="grad">Win your mini-league.</span>
+          </h2>
+          <p className="auth-aside-sub">
+            The FPL decision engine — who to captain, who to buy, who to bench, with the reasoning behind every call.
+          </p>
+          <div className="hero-visual">
+            <MockCaptainCard animate />
+          </div>
+          <ul className="auth-points">
+            <li>Free forever plan — no card required</li>
+            <li>AI captain picks, differentials &amp; price radar</li>
+            <li>Your team, analysed before every deadline</li>
+          </ul>
+        </aside>
+
         <div className="auth-card">
           <Link className="auth-brand" to="/">
             <span className="mkt-mark">P</span>

@@ -187,11 +187,122 @@
 .modal-close { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: .88rem; margin-top: 14px; width: 100%; text-align: center; }
 .modal-note { font-family: var(--mono); font-size: .72rem; color: var(--faint); margin: 14px 0 0; line-height: 1.5; text-align: center; }
 
+/* ============================ motion ============================ */
+
+/* Shared gradient-text helper (hero already had its own; this generalises it). */
+.mkt .grad {
+  background: linear-gradient(120deg, var(--accent-deep), var(--accent));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+
+/* Ambient animated aurora that drifts behind everything. */
+.mkt { position: relative; z-index: 0; }
+.mkt::before {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(38% 40% at 18% 12%, rgba(36, 214, 127, 0.13), transparent 60%),
+    radial-gradient(32% 42% at 84% 18%, rgba(111, 224, 163, 0.10), transparent 60%),
+    radial-gradient(44% 42% at 72% 92%, rgba(18, 184, 102, 0.10), transparent 62%);
+  animation: mkt-drift 22s ease-in-out infinite alternate;
+}
+@keyframes mkt-drift {
+  0%   { transform: translate3d(0, 0, 0) scale(1);      opacity: 0.85; }
+  50%  { transform: translate3d(0, -1.5%, 0) scale(1.06); opacity: 1; }
+  100% { transform: translate3d(0, 1%, 0) scale(1.02);  opacity: 0.8; }
+}
+
+/* On-load entrance. */
+@keyframes mkt-up {
+  from { opacity: 0; transform: translateY(22px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes mkt-in-right {
+  from { opacity: 0; transform: translateY(28px) scale(0.97); }
+  to   { opacity: 1; transform: none; }
+}
+
+.mkt-nav     { animation: mkt-up 0.6s ease-out both; }
+.hero-eyebrow,
+.hero h1, .hero-sub, .hero-cta, .hero-note {
+  animation: mkt-up 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.hero h1     { animation-delay: 0.08s; }
+.hero-sub    { animation-delay: 0.16s; }
+.hero-cta    { animation-delay: 0.24s; }
+.hero-note   { animation-delay: 0.32s; }
+.hero .hero-visual { animation: mkt-in-right 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both; animation-delay: 0.2s; }
+
+/* Hero/login mock card: soft floating glow behind, gentle bob. */
+.hero-visual { position: relative; }
+.hero-visual::before {
+  content: ""; position: absolute; inset: 0; z-index: 0;
+  background: radial-gradient(60% 55% at 50% 46%, var(--glow), transparent 70%);
+  filter: blur(30px); animation: glow-pulse 6s ease-in-out infinite;
+}
+.hero-visual .mock-card { position: relative; z-index: 1; }
+.mock-card { animation: mock-float 7s ease-in-out infinite; will-change: transform; }
+.mock-card:hover { animation-play-state: paused; }
+@keyframes mock-float {
+  0%, 100% { transform: translateY(0) rotate(-0.25deg); }
+  50%      { transform: translateY(-10px) rotate(0.25deg); }
+}
+@keyframes glow-pulse {
+  0%, 100% { opacity: 0.45; transform: scale(0.96); }
+  50%      { opacity: 0.85; transform: scale(1.05); }
+}
+
+/* Scroll-reveal for the lower sections. */
+.reveal {
+  opacity: 0; transform: translateY(26px);
+  transition: opacity 0.6s ease, transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1),
+    border-color 0.25s ease, box-shadow 0.25s ease;
+}
+.reveal.is-visible { opacity: 1; transform: none; }
+
+/* Card hover lifts (placed after reveal so :hover wins the transform). */
+.feature:hover, .step:hover {
+  transform: translateY(-4px);
+  border-color: var(--border-strong);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.34);
+}
+
+/* ---- login: branded split that mirrors the landing hero ---- */
+.auth-split {
+  display: grid; grid-template-columns: 1.05fr 0.95fr; gap: clamp(28px, 5vw, 64px);
+  align-items: center; justify-items: stretch;
+  max-width: 1060px; margin: 0 auto; min-height: 100vh;
+  padding: 40px clamp(20px, 5vw, 48px);
+}
+.auth-aside { animation: mkt-up 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.auth-aside-brand { justify-content: flex-start; margin-bottom: 26px; }
+.auth-aside-title {
+  font-size: clamp(1.8rem, 4vw, 2.9rem); line-height: 1.05; letter-spacing: -0.02em;
+  margin: 0 0 16px; font-weight: 850; text-wrap: balance;
+}
+.auth-aside-sub { color: var(--muted); font-size: 1.05rem; margin: 0 0 26px; max-width: 42ch; }
+.auth-points { list-style: none; margin: 26px 0 0; padding: 0; display: flex; flex-direction: column; gap: 11px; }
+.auth-points li { display: flex; align-items: baseline; gap: 10px; color: var(--ink); font-size: 0.94rem; }
+.auth-points li::before { content: "✓"; color: var(--accent); font-weight: 800; flex-shrink: 0; }
+.auth-split .auth-card { animation: mkt-in-right 0.8s cubic-bezier(0.2, 0.7, 0.2, 1) both; animation-delay: 0.1s; }
+.auth-split .auth-brand { display: none; } /* the aside carries the brand now */
+
 @media (max-width: 860px) {
   .hero { grid-template-columns: 1fr; gap: 36px; }
   .hero-visual { order: -1; }
+  .auth-split { grid-template-columns: 1fr; min-height: auto; gap: 28px; }
+  .auth-split .auth-card { order: -1; }
+  .auth-aside { text-align: center; }
+  .auth-aside-brand { justify-content: center; }
+  .auth-aside-sub { margin-inline: auto; }
+  .auth-split .hero-visual { display: none; } /* keep the mobile sign-in compact */
+  .auth-points { display: inline-flex; text-align: left; }
 }
 @media (prefers-reduced-motion: reduce) {
   .mkt-btn:hover { transform: none; }
+  .mkt::before, .mock-card, .hero-visual::before { animation: none !important; }
+  .mkt-nav, .hero-eyebrow, .hero h1, .hero-sub, .hero-cta, .hero-note,
+  .hero .hero-visual, .auth-aside, .auth-split .auth-card { animation: none !important; }
+  .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
+  .feature:hover, .step:hover { transform: none; }
 }
 
