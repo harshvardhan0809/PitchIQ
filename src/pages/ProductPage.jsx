@@ -14,6 +14,7 @@ import { PlayersToWatch } from '../components/PlayersToWatch'
 import { PlayerSearch } from '../components/PlayerSearch'
 import { AccountMenu } from '../components/AccountMenu'
 import { ProUpsell } from '../components/ProUpsell'
+import { SideMenu } from '../components/SideMenu'
 import { useAuth, PLAN_NAMES } from '../lib/auth'
 import { useIsAdmin } from '../hooks/useIsAdmin'
 import { PlayerViewProvider } from '../lib/playerView'
@@ -35,14 +36,18 @@ const PriceWatch = lazy(() => import('../components/intel/PriceWatch')
 const LeagueWarRoom = lazy(() => import('../components/intel/LeagueWarRoom')
   .then((module) => ({ default: module.LeagueWarRoom })))
 
+// Ordered top-to-bottom by how central each surface is to a weekly decision:
+// the free matchday home first, then your own team, the flagship captain call,
+// the digest that ties it together, the daily market check, the mini-league
+// edge, and finally the advanced differential hunt.
 const VIEWS = [
-  { id: 'matchday', label: 'Matchday' },
-  { id: 'briefing', label: 'Briefing', premium: true },
-  { id: 'prices', label: 'Price Watch', premium: true },
-  { id: 'league', label: 'War Room', premium: true },
-  { id: 'squad', label: 'My Team', premium: true },
-  { id: 'captain', label: 'Captain AI', premium: true },
-  { id: 'differentials', label: 'Differentials', premium: true },
+  { id: 'matchday', label: 'Matchday', icon: '⚽', hint: 'Fixtures & players to watch' },
+  { id: 'squad', label: 'My Team', premium: true, icon: '🧩', hint: 'Your squad, projected & fixed' },
+  { id: 'captain', label: 'Captain AI', premium: true, icon: '🧠', hint: 'Who to give the armband' },
+  { id: 'briefing', label: 'Weekly Briefing', premium: true, icon: '📅', hint: 'Your gameweek in a minute' },
+  { id: 'prices', label: 'Price Watch', premium: true, icon: '💰', hint: 'Tonight’s risers & fallers' },
+  { id: 'league', label: 'War Room', premium: true, icon: '⚔️', hint: 'Spy on your mini-league' },
+  { id: 'differentials', label: 'Differentials', premium: true, icon: '💎', hint: 'Low-owned, high-upside picks' },
 ]
 
 const INTEL_VIEWS = {
@@ -93,6 +98,8 @@ function ProductBody() {
   const { plan, signedIn } = useAuth()
   const isAdmin = useIsAdmin()
   const [view, setView] = useState('matchday')
+  const [menuOpen, setMenuOpen] = useState(false)
+  const activeView = VIEWS.find((item) => item.id === view) ?? VIEWS[0]
   const league = 'PL' // PitchIQ is Premier League only.
   const [query, setQuery] = useState('')
   const [reloadToken, setReloadToken] = useState(0)
@@ -118,6 +125,18 @@ function ProductBody() {
   return (
     <div className="app">
       <header className="topbar">
+        <button
+          className="menu-btn"
+          type="button"
+          onClick={() => setMenuOpen(true)}
+          aria-label="Open menu"
+          aria-expanded={menuOpen}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+            <path d="M4 7h16M4 12h16M4 17h16" />
+          </svg>
+        </button>
+
         <Link className="brand" to="/">
           <span className="brand-mark" aria-hidden="true">P</span>
           <span className="brand-text">
@@ -126,22 +145,10 @@ function ProductBody() {
           </span>
         </Link>
 
-        <nav className="primary-nav" aria-label="Sections">
-          {VIEWS.map((item) => (
-            <button
-              aria-current={item.id === view ? 'page' : undefined}
-              className={`nav-link ${item.id === view ? 'active' : ''}`}
-              key={item.id}
-              onClick={() => setView(item.id)}
-              type="button"
-            >
-              {item.label}
-              {item.premium && <span className="nav-pro">PRO</span>}
-            </button>
-          ))}
-          <Link className="nav-link" to="/pricing">Pricing</Link>
-          {isAdmin && <Link className="nav-link" to="/admin">Admin</Link>}
-        </nav>
+        <span className="topbar-current" aria-hidden="true">
+          <span className="tc-ic">{activeView.icon}</span>
+          <span className="tc-label">{activeView.label}</span>
+        </span>
 
         <span className={`mode-badge ${usesLiveData ? 'live' : ''}`}>
           {usesLiveData ? 'Live data' : 'Demo data'}
@@ -153,6 +160,15 @@ function ProductBody() {
 
         <AccountMenu />
       </header>
+
+      <SideMenu
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        views={VIEWS}
+        activeView={view}
+        onSelectView={setView}
+        isAdmin={isAdmin}
+      />
 
       <main id="main">
         {INTEL_VIEWS[view] ? (
