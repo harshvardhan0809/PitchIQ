@@ -115,7 +115,7 @@ function StandingsTable({ standings, locked }) {
               </td>
               <td className="wr-td-cap">
                 {row.captain
-                  ? <span className="wr-cap"><PlayerLink id={row.captain.id}>{row.captain.webName}</PlayerLink><small>{row.captain.teamShort}</small></span>
+                  ? <span className="wr-cap"><PlayerLink player={row.captain}>{row.captain.webName}</PlayerLink><small>{row.captain.teamShort}</small></span>
                   : locked ? <span className="wr-cap-lock" title="Pro feature">🔒</span> : <span className="wr-cap-none">—</span>}
               </td>
               <td className="wr-td-num">{row.eventTotal}</td>
@@ -137,7 +137,7 @@ function CaptainBars({ captains }) {
       <ul className="wr-cap-bars">
         {captains.map((c) => (
           <li key={`${c.webName}-${c.teamShort}`} className="wr-cap-bar">
-            <span className="wr-cap-name"><PlayerLink id={c.id}>{c.webName}</PlayerLink> <small>{c.teamShort}</small></span>
+            <span className="wr-cap-name"><PlayerLink player={c}>{c.webName}</PlayerLink> <small>{c.teamShort}</small></span>
             <span className="wr-cap-track"><span className="wr-cap-fill" style={{ width: `${(c.pct / max) * 100}%` }} /></span>
             <span className="wr-cap-pct">{c.pct}%</span>
           </li>
@@ -159,7 +159,7 @@ function TemplateChips({ template, differentials }) {
             {template.map((t) => (
               <li key={`${t.webName}-${t.teamShort}`} className="wr-chip">
                 <span className="pos-pill">{t.position}</span>
-                <PlayerLink id={t.id}>{t.webName}</PlayerLink><small>{t.teamShort}</small>
+                <PlayerLink player={t}>{t.webName}</PlayerLink><small>{t.teamShort}</small>
                 <span className="wr-chip-pct">{t.pct}%</span>
               </li>
             ))}
@@ -174,7 +174,7 @@ function TemplateChips({ template, differentials }) {
             {differentials.map((d) => (
               <li key={`${d.webName}-${d.teamShort}`} className="wr-chip wr-chip-diff">
                 <span className="pos-pill">{d.position}</span>
-                <PlayerLink id={d.id}>{d.webName}</PlayerLink><small>{d.teamShort}</small>
+                <PlayerLink player={d}>{d.webName}</PlayerLink><small>{d.teamShort}</small>
                 <span className="wr-chip-own">{d.owners} owner{d.owners === 1 ? '' : 's'}</span>
               </li>
             ))}

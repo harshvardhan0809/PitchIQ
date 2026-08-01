@@ -1,4 +1,5 @@
 import { demoDashboards, demoSearchResults, demoSpotlight } from '../data/demoData'
+import { demoPlayerDashboard } from '../data/demoPlayer'
 
 const dataMode = import.meta.env.VITE_DATA_MODE ?? 'demo'
 export const usesLiveData = dataMode === 'live'
@@ -59,12 +60,20 @@ export async function searchPlayers(query = '', league = 'PL') {
   return body.players ?? []
 }
 
-export async function getPlayerDashboard(id, league = 'PL') {
+/**
+ * `ref` is either an `fpl:{id}` string (search / live cards) or a player object
+ * carrying at least a name (intel cards, which pass their own data). In demo mode
+ * we prefer a hand-authored dashboard, else synthesise one from the object so a
+ * click on any name opens a full report. Live mode always needs the fpl id.
+ */
+export async function getPlayerDashboard(ref, league = 'PL') {
+  const id = typeof ref === 'string' ? ref : ref?.id
+
   if (!usesLiveData) {
-    const dashboard = demoDashboards[id]
-    if (!dashboard) throw new ApiError('That player is not in the demo dataset.', 404)
-    return delay(dashboard)
+    const authored = id ? demoDashboards[id] : null
+    return delay(authored ?? demoPlayerDashboard(typeof ref === 'object' && ref ? ref : { id }))
   }
 
+  if (!id) throw new ApiError('Unrecognised player reference.', 400)
   return request(`/api/players/${encodeURIComponent(id)}/dashboard?league=${encodeURIComponent(league)}`)
 }

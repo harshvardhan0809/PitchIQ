@@ -67,7 +67,7 @@ function TopPick({ pick }) {
       <div className="top-pick-body">
         <Face pick={pick} />
         <div className="pick-id">
-          <h2 className="pick-name"><PlayerLink id={pick.id}>{pick.name}</PlayerLink></h2>
+          <h2 className="pick-name"><PlayerLink player={pick}>{pick.name}</PlayerLink></h2>
           <div className="pick-meta">
             <span className="pos-pill">{pick.position}</span>
             <span>{pick.team}</span>
@@ -96,7 +96,7 @@ function BoardRow({ pick }) {
       <span className="rank">{pick.rank}</span>
       <div className="row-id">
         <div className="row-name">
-          <PlayerLink id={pick.id}>{pick.name}</PlayerLink>
+          <PlayerLink player={pick}>{pick.name}</PlayerLink>
           {pick.flags?.differential && <span className="badge-diff">Diff</span>}
         </div>
         <div className="row-meta">

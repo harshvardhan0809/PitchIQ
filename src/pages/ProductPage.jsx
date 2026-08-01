@@ -15,7 +15,8 @@ import { PlayerSearch } from '../components/PlayerSearch'
 import { AccountMenu } from '../components/AccountMenu'
 import { useAuth, PLAN_NAMES } from '../lib/auth'
 import { useIsAdmin } from '../hooks/useIsAdmin'
-import { PlayerViewProvider, usePlayerView } from '../lib/playerView'
+import { PlayerViewProvider } from '../lib/playerView'
+import { usePlayerView } from '../lib/playerViewContext'
 import '../App.css'
 
 // The intelligence views are code-split so the free matchday experience keeps a

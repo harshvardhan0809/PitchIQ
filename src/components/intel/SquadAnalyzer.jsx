@@ -50,7 +50,7 @@ function PlayerRow({ player }) {
     <li className={`sq-row ${doubt ? 'is-doubt' : ''}`}>
       <span className="pos-pill">{player.position}</span>
       <span className="sq-row-name">
-        <PlayerLink id={player.id}>{player.webName ?? player.name}</PlayerLink>
+        <PlayerLink player={player}>{player.webName ?? player.name}</PlayerLink>
         {player.isCaptain && <span className="sq-armband" title="Captain">C</span>}
         {player.isViceCaptain && <span className="sq-armband vice" title="Vice-captain">V</span>}
         {doubt && <span className="sq-doubt-dot" title={player.availability.label}>●</span>}
@@ -72,7 +72,7 @@ function CaptainAdvice({ squad }) {
       <div className="sq-captain-body">
         <Face player={recommendedCaptain} size="md" />
         <div>
-          <h3><PlayerLink id={recommendedCaptain.id}>{recommendedCaptain.name}</PlayerLink> <span className="mult">×{captainMultiplier}</span></h3>
+          <h3><PlayerLink player={recommendedCaptain}>{recommendedCaptain.name}</PlayerLink> <span className="mult">×{captainMultiplier}</span></h3>
           <p className="sq-captain-line">
             {keep
               ? 'Your captain has the best projected ceiling in the XI.'
@@ -101,7 +101,7 @@ function WeakLinks({ links }) {
           <li key={player.id} className="sq-weak-item">
             <Face player={player} />
             <div className="sq-weak-id">
-              <span className="sq-weak-name"><PlayerLink id={player.id}>{player.name}</PlayerLink></span>
+              <span className="sq-weak-name"><PlayerLink player={player}>{player.name}</PlayerLink></span>
               <span className="sq-weak-reason">{player.reason}</span>
             </div>
             <span className="sq-row-xpts">{player.expectedPoints}<small>xPts</small></span>
@@ -120,7 +120,7 @@ function TransferCard({ swap }) {
     <li className="sq-transfer">
       <div className="sq-transfer-side out">
         <span className="sq-transfer-dir">OUT</span>
-        <span className="sq-transfer-name"><PlayerLink id={swap.out.id}>{swap.out.webName ?? swap.out.name}</PlayerLink></span>
+        <span className="sq-transfer-name"><PlayerLink player={swap.out}>{swap.out.webName ?? swap.out.name}</PlayerLink></span>
         <span className="sq-transfer-meta">{swap.out.teamShort} · {swap.out.expectedPoints} xPts</span>
         <span className="sq-transfer-reason">{swap.reason}</span>
       </div>
@@ -130,7 +130,7 @@ function TransferCard({ swap }) {
       </div>
       <div className="sq-transfer-side in">
         <span className="sq-transfer-dir">IN</span>
-        <span className="sq-transfer-name"><PlayerLink id={swap.in.id}>{swap.in.webName ?? swap.in.name}</PlayerLink></span>
+        <span className="sq-transfer-name"><PlayerLink player={swap.in}>{swap.in.webName ?? swap.in.name}</PlayerLink></span>
         <span className="sq-transfer-meta">{swap.in.teamShort} · {swap.in.expectedPoints} xPts</span>
         <span className="sq-transfer-spend">{spendLabel}</span>
       </div>

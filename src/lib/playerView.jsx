@@ -1,8 +1,9 @@
-import { createContext, useCallback, useContext, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 import { useAsync } from '../hooks/useAsync'
 import { getPlayerDashboard } from '../services/footballApi'
 import { PlayerDashboard } from '../components/PlayerDashboard'
+import { PlayerViewContext } from './playerViewContext'
 
 /**
  * App-wide "open a player" service. Any component can call `openPlayer(identity)`
@@ -11,12 +12,6 @@ import { PlayerDashboard } from '../components/PlayerDashboard'
  * all lead to the same dashboard, and closing returns you exactly where you were.
  * `identity` is the `fpl:{id}` reference the search dashboard already uses.
  */
-const PlayerViewContext = createContext({ openPlayer: () => {} })
-
-export function usePlayerView() {
-  return useContext(PlayerViewContext)
-}
-
 function PlayerModal({ identity, onClose }) {
   const { status, data, error, reload } = useAsync(getPlayerDashboard, [identity, 'PL'])
 
@@ -63,7 +58,12 @@ function PlayerModal({ identity, onClose }) {
 
 export function PlayerViewProvider({ children }) {
   const [identity, setIdentity] = useState(null)
-  const openPlayer = useCallback((id) => { if (id) setIdentity(String(id)) }, [])
+  // Accept a bare `fpl:{id}` string (search / matchday) or a player object with
+  // display fields (intel cards) — the latter lets demo mode build a report.
+  const openPlayer = useCallback((ref) => {
+    if (!ref) return
+    setIdentity(typeof ref === 'string' ? { id: ref } : ref)
+  }, [])
   const close = useCallback(() => setIdentity(null), [])
 
   return (

@@ -28,7 +28,7 @@ function PriceRow({ item, direction }) {
       <Face item={item} />
       <div className="pw-id">
         <div className="pw-name">
-          <PlayerLink id={item.id}>{item.webName}</PlayerLink>
+          <PlayerLink player={item}>{item.webName}</PlayerLink>
           {item.changedThisGw !== 0 && (
             <span className="pw-changed">{item.changedThisGw > 0 ? '▲' : '▼'} £{Math.abs(item.changedThisGw).toFixed(1)} today</span>
           )}
