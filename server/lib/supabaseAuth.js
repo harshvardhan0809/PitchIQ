@@ -203,6 +203,50 @@ export class SupabaseAuth {
 
   // --- admin -----------------------------------------------------------------
 
+  // --- app settings (admin-tuned, app-wide) ----------------------------------
+  // Stored as a single JSONB row (key='app') in public.app_settings. If the
+  // table is not present yet, reads return null and writes report it clearly so
+  // the admin console can tell the user to run the migration.
+
+  /**
+   * Read the settings blob. Returns { present, value } where `present` means the
+   * app_settings table exists and is reachable (a durable store) — independent of
+   * whether a row has been written yet. `value` is the stored blob or null.
+   */
+  async getAppSettings() {
+    if (!this.canManage) return { present: false, value: null }
+    let response
+    try {
+      response = await fetch(
+        `${this.restUrl}/app_settings?key=eq.app&select=value`,
+        { headers: this.restHeaders() },
+      )
+    } catch {
+      return { present: false, value: null }
+    }
+    // A 200 (even with an empty array) proves the table is there; a 404/40x means
+    // it hasn't been created, so the caller should treat storage as unavailable.
+    if (!response.ok) return { present: false, value: null }
+    const rows = await response.json().catch(() => null)
+    return { present: true, value: rows?.[0]?.value ?? null }
+  }
+
+  /** Persist the settings blob. Throws (502) if the table isn't there yet. */
+  async saveAppSettings(value) {
+    if (!this.canManage) {
+      throw new HttpError('This server cannot store settings (missing service role key).', 503)
+    }
+    const response = await fetch(`${this.restUrl}/app_settings`, {
+      method: 'POST',
+      headers: this.restHeaders({ 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' }),
+      body: JSON.stringify({ key: 'app', value, updated_at: new Date().toISOString() }),
+    })
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '')
+      throw new HttpError(`Could not save settings. Run the app_settings migration in Supabase.${detail ? ` ${detail}` : ''}`, 502)
+    }
+  }
+
   /** List all users via the admin API (service role required). */
   async listUsers({ page = 1, perPage = 200 } = {}) {
     if (!this.canManage) {

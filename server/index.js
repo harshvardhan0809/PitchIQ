@@ -22,11 +22,13 @@ import { getBriefing } from './lib/intelligence/briefing.js'
 import { getSquadAnalysis } from './lib/intelligence/squad.js'
 import { getPriceWatch } from './lib/intelligence/priceWatch.js'
 import { getLeagueWarRoom } from './lib/intelligence/league.js'
+import { getManagerAnalysis } from './lib/intelligence/manager.js'
 import { parseLeagueId } from './lib/providers/fpl.js'
 import { parseEntryId } from './lib/providers/fpl.js'
 import { RazorpayClient } from './lib/providers/razorpay.js'
 import { featureMeta, isEntitled, PLAN_ORDER } from './lib/entitlements.js'
 import { SupabaseAuth } from './lib/supabaseAuth.js'
+import { DEFAULT_SETTINGS, sanitizeSettings, withDefaults } from './lib/settings.js'
 
 /**
  * Minimal .env reader for `node server/index.js` without a flag. Values are
@@ -55,7 +57,7 @@ loadEnvFile()
 
 // Identifies the running code so a stale `node server/index.js` is detectable
 // at /api/health and in the startup log. Bump on behaviour changes.
-const SERVER_BUILD = '2026-07-29-war-room'
+const SERVER_BUILD = '2026-08-02-admin-settings'
 
 const port = Number(process.env.PORT ?? process.env.API_PORT ?? 3001)
 const host = process.env.API_HOST ?? '0.0.0.0'
@@ -126,6 +128,50 @@ const razorpay = new RazorpayClient({
   webhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET,
   planId: process.env.RAZORPAY_PLAN_ID,
 })
+
+// --- App settings (admin-tuned) --------------------------------------------
+// The last-known settings are held in-process and refreshed from Supabase on a
+// short TTL, so the hot path (/api/config on every app load) doesn't hit the DB
+// each time. `persisted` records whether the app_settings table actually
+// answered, so the admin console can warn when changes are memory-only.
+const settingsState = { value: DEFAULT_SETTINGS, persisted: false, fetchedAt: 0 }
+const SETTINGS_TTL_MS = 10 * 1000
+
+async function loadSettings({ force = false } = {}) {
+  const fresh = Date.now() - settingsState.fetchedAt < SETTINGS_TTL_MS
+  if (!force && fresh) return settingsState.value
+  try {
+    const { present, value } = await supabaseAuth.getAppSettings()
+    // `present` reflects the table existing (a durable store), even before the
+    // first row is written. Only overwrite our in-memory copy when a row exists.
+    if (value) settingsState.value = withDefaults(value)
+    settingsState.persisted = present
+  } catch {
+    settingsState.persisted = false
+  }
+  settingsState.fetchedAt = Date.now()
+  return settingsState.value
+}
+
+/** Admin write path: sanitize over the current values, persist, cache. */
+async function persistSettings(patch) {
+  const base = await loadSettings({ force: true })
+  const next = sanitizeSettings(patch, base)
+  let persisted
+  try {
+    await supabaseAuth.saveAppSettings(next)
+    persisted = true
+  } catch (error) {
+    // Re-throw only if we truly have no way to store it; otherwise keep it in
+    // memory so a table-less dev setup still works for the current process.
+    if (!supabaseAuth.canManage) throw error
+    persisted = false
+  }
+  settingsState.value = next
+  settingsState.persisted = persisted
+  settingsState.fetchedAt = Date.now()
+  return { settings: next, persisted }
+}
 
 // Who may use the admin console. Membership is by email (server-side only), not
 // by plan, so an admin can never accidentally revoke their own access by editing
@@ -258,6 +304,14 @@ async function handleUpdateProfile(request) {
     displayName: saved?.display_name ?? null,
     favoriteTeam: saved?.favorite_team ?? null,
   }
+}
+
+/** Admin: save the app-wide settings (ad cadence, banner, features, defaults). */
+async function handleAdminSaveSettings(request) {
+  await requireAdmin(request)
+  const body = await readJsonBody(request)
+  const { settings, persisted } = await persistSettings(body)
+  return { settings, persisted }
 }
 
 /** Admin: manually set any user's subscription (upgrade or downgrade). */
@@ -470,6 +524,40 @@ function gateLeague(result, plan) {
   }
 }
 
+/**
+ * Manager's Mindset gates the depth: everyone sees the team, its mentality
+ * archetype and what that means (the shareable read); the trait breakdown and
+ * how the mindset shapes the next match are the Pro payoff.
+ */
+function gateManager(result, plan) {
+  const meta = featureMeta('manager-mindset')
+  const unlocked = isEntitled(plan, 'manager-mindset')
+  const base = {
+    feature: meta.key,
+    featureName: meta.name,
+    requiredPlan: meta.requiredPlan,
+    plan,
+    gameweek: result.gameweek,
+    gameweekName: result.gameweekName,
+    phase: result.phase,
+    generatedAt: result.generatedAt,
+    dataDepth: result.dataDepth,
+    teams: result.teams,
+    team: result.team,
+  }
+  if (unlocked) {
+    return { ...base, locked: false, profile: result.profile, nextMatch: result.nextMatch }
+  }
+  // Free: the archetype read only — traits, ratings, record and next-match locked.
+  const { archetype, mentality, effect } = result.profile
+  return {
+    ...base,
+    locked: true,
+    profile: { archetype, mentality, effect, ratings: null, traits: [], record: null },
+    nextMatch: null,
+  }
+}
+
 const routes = [
   {
     pattern: /^\/api\/health$/,
@@ -492,6 +580,39 @@ const routes = [
       })),
       cacheEntries: cache.size,
     }),
+  },
+  {
+    // Public app configuration the running app reads on load: ad cadence & copy,
+    // the announcement banner, feature visibility and the Manager default club.
+    // No secrets — every field is admin-tuned presentation.
+    pattern: /^\/api\/config$/,
+    cacheControl: 'no-store',
+    handle: async () => {
+      const settings = await loadSettings()
+      return { build: SERVER_BUILD, ...settings }
+    },
+  },
+  {
+    // Admin: the editable settings plus diagnostics for the console.
+    pattern: /^\/api\/admin\/settings$/,
+    cacheControl: 'no-store',
+    handle: async (_match, _url, request) => {
+      await requireAdmin(request)
+      const settings = await loadSettings({ force: true })
+      return {
+        settings,
+        diagnostics: {
+          serverBuild: SERVER_BUILD,
+          settingsPersisted: settingsState.persisted,
+          supabaseConfigured: supabaseAuth.configured,
+          supabaseManage: supabaseAuth.canManage,
+          billingConfigured: razorpay.configured,
+          adminEmails: adminEmails.length,
+          liveData: true,
+          cacheEntries: cache.size,
+        },
+      }
+    },
   },
   {
     // Matchday — Premier League, straight from the FPL API.
@@ -598,6 +719,25 @@ const routes = [
     },
   },
   {
+    // Manager's Mindset — a club's tactical mentality read from its on-pitch
+    // behaviour, and how it shapes the next fixture. Premium, PL only, no-store
+    // because the payload is gated to the caller's plan.
+    pattern: /^\/api\/intel\/manager$/,
+    cacheControl: 'no-store',
+    handle: async (_match, url, request) => {
+      const competition = getCompetition(url.searchParams.get('league') ?? defaultCompetition)
+      if (!competition.supportsFpl) {
+        throw new HttpError('Manager analysis is available for the Premier League only.', 400)
+      }
+      const teamParam = url.searchParams.get('team')
+      const teamId = teamParam && /^\d{1,3}$/.test(teamParam) ? Number(teamParam) : null
+      const plan = await planOf(request)
+      const { managerDefaultTeam } = await loadSettings()
+      const result = await getManagerAnalysis({ fpl, teamId, defaultTeamShort: managerDefaultTeam })
+      return gateManager(result, plan)
+    },
+  },
+  {
     // Squad analysis for a connected FPL team. The projected score, captain
     // advice and weak links are free (the retention hook); the transfer fixes
     // are the Pro payoff. PL-only, no-store because it is personal to the caller.
@@ -646,6 +786,7 @@ const routes = [
 // handled separately because it must verify a signature over the raw body.
 const POST_ROUTES = {
   '/api/admin/users/plan': handleAdminSetPlan,
+  '/api/admin/settings': handleAdminSaveSettings,
   '/api/billing/subscribe': handleSubscribe,
   '/api/profile': handleUpdateProfile,
 }

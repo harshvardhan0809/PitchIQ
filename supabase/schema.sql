@@ -29,9 +29,19 @@ create table if not exists public.subscriptions (
   updated_at               timestamptz not null default now()
 );
 
+-- 2b) APP_SETTINGS — admin-tuned, app-wide config (ad cadence & copy, the
+-- announcement banner, feature visibility, Manager default club). One JSONB row,
+-- key='app'. Written only by the server (service_role); read by everyone.
+create table if not exists public.app_settings (
+  key        text primary key,
+  value      jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
+
 -- 3) Row-level security
 alter table public.profiles      enable row level security;
 alter table public.subscriptions enable row level security;
+alter table public.app_settings  enable row level security;
 
 -- profiles: a user reads/updates/inserts ONLY their own row
 drop policy if exists profiles_select_own on public.profiles;
@@ -82,6 +92,12 @@ create trigger profiles_touch before update on public.profiles
 drop trigger if exists subscriptions_touch on public.subscriptions;
 create trigger subscriptions_touch before update on public.subscriptions
   for each row execute function public.touch_updated_at();
+drop trigger if exists app_settings_touch on public.app_settings;
+create trigger app_settings_touch before update on public.app_settings
+  for each row execute function public.touch_updated_at();
+
+-- app_settings has NO client policies on purpose: RLS is enabled and no policy
+-- is granted, so only the service_role (the server) can read or write it.
 
 -- 7) Backfill EXISTING users — preserves current Pro (maps legacy elite→pro)
 insert into public.profiles (id, email)

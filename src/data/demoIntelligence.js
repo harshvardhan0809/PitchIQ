@@ -265,6 +265,97 @@ export function demoLeague(plan = 'free') {
   }
 }
 
+// Manager's Mindset: a few sample club profiles so the view, the picker and the
+// Pro paywall are explorable offline. Mirrors the /api/intel/manager shape.
+const MGR_TEAMS = [
+  { id: 11, name: 'Manchester City', shortName: 'MCI' },
+  { id: 1, name: 'Arsenal', shortName: 'ARS' },
+  { id: 14, name: 'Nottingham Forest', shortName: 'NFO' },
+  { id: 12, name: 'Luton Town', shortName: 'LUT' },
+]
+
+const MGR_PROFILES = {
+  11: {
+    crest: null, archetypeKey: 'controller', archetypeLabel: 'Complete Controller',
+    tagline: 'Dominates both boxes — dictates the game on its terms.',
+    mentality: 'Set up to control every phase: relentless in possession and hard to break down. A front-foot mentality that still values a clean sheet — this team expects to win, not to survive.',
+    effect: 'Wins the expected-goals battle comfortably. Good for attackers and defenders alike; the only real risk is complacency against a deep block.',
+    attack: 92, defence: 84,
+    traits: [
+      { label: 'Attacking intent', value: '92/100', score: 92, tone: 'good', note: 'How much the team commits to scoring.' },
+      { label: 'Defensive setup', value: '84/100', score: 84, tone: 'good', note: 'How much it prioritises keeping it tight.' },
+      { label: 'Home fortress', value: 'Stronger at home', score: 78, tone: 'good' },
+      { label: 'Composed', value: 'Consistent margins', score: 82, tone: 'good', note: 'Rarely blown out; steady.' },
+      { label: 'Momentum', value: 'On a high', score: 80, tone: 'good', note: 'Form 3.4.' },
+    ],
+    record: { played: 6, goalsFor: 15, goalsAgainst: 4, cleanSheets: 3, recent: ['W', 'W', 'D', 'W', 'W'] },
+    nextMatch: {
+      available: true, opponent: 'Luton Town', opponentShort: 'LUT', opponentArchetype: 'Scrappy Survivor',
+      home: true, kickoff: null, matchday: 7, character: 'balanced',
+      lean: 'Leans to a comfortable home win — the attack should overpower LUT.',
+      edge: 'Complete Controller vs Scrappy Survivor: contrasting plans — expect City to impose their game and control the tempo.',
+      cleanSheetPct: 82,
+    },
+  },
+  14: {
+    crest: null, archetypeKey: 'organiser', archetypeLabel: 'Pragmatic Organiser',
+    tagline: 'Control the risk — solid shape, take what the game gives.',
+    mentality: 'A defence-first mind: a compact block, patience, and clean sheets over spectacle. Happy to keep it tight and win the moments rather than the possession count.',
+    effect: 'Low-scoring, cagey matches. Clean-sheet points and set-piece threats matter more than open play; its attackers can go quiet for spells.',
+    attack: 44, defence: 71,
+    traits: [
+      { label: 'Attacking intent', value: '44/100', score: 44, tone: 'neutral', note: 'How much the team commits to scoring.' },
+      { label: 'Defensive setup', value: '71/100', score: 71, tone: 'good', note: 'How much it prioritises keeping it tight.' },
+      { label: 'Home fortress', value: 'Stronger at home', score: 68, tone: 'good' },
+      { label: 'Measured', value: 'Occasional swings', score: 55, tone: 'neutral', note: 'Mostly controlled results.' },
+      { label: 'Momentum', value: 'Ticking over', score: 52, tone: 'neutral', note: 'Form 1.6.' },
+    ],
+    record: { played: 6, goalsFor: 6, goalsAgainst: 6, cleanSheets: 3, recent: ['D', 'W', 'L', 'D', 'W'] },
+    nextMatch: {
+      available: true, opponent: 'Arsenal', opponentShort: 'ARS', opponentArchetype: 'Front-Foot Aggressor',
+      home: false, kickoff: null, matchday: 7, character: 'cagey',
+      lean: 'The tougher side of the tie — Arsenal holds the edge here.',
+      edge: 'Pragmatic Organiser vs Front-Foot Aggressor: a low block against an attack — expect Forest to sit in and counter.',
+      cleanSheetPct: 38,
+    },
+  },
+}
+
+function demoManagerFor(teamId, plan) {
+  const key = MGR_PROFILES[teamId] ? Number(teamId) : 11
+  const p = MGR_PROFILES[key]
+  const team = MGR_TEAMS.find((t) => t.id === key)
+  const unlocked = plan !== 'free'
+  const base = {
+    ...DEMO_META,
+    generatedAt: new Date().toISOString(),
+    feature: 'manager-mindset', featureName: 'Manager’s Mindset', requiredPlan: 'pro', plan,
+    dataDepth: 'in-season',
+    teams: MGR_TEAMS,
+    team: { id: team.id, name: team.name, shortName: team.shortName, crest: p.crest },
+  }
+  const archetype = { key: p.archetypeKey, label: p.archetypeLabel, tagline: p.tagline }
+  if (!unlocked) {
+    return {
+      ...base, locked: true,
+      profile: { archetype, mentality: p.mentality, effect: p.effect, ratings: null, traits: [], record: null },
+      nextMatch: null,
+    }
+  }
+  return {
+    ...base, locked: false,
+    profile: {
+      archetype, mentality: p.mentality, effect: p.effect,
+      ratings: { attack: p.attack, defence: p.defence }, traits: p.traits, record: p.record,
+    },
+    nextMatch: p.nextMatch,
+  }
+}
+
+export function demoManager(plan = 'free', teamId = '') {
+  return demoManagerFor(teamId || 11, plan)
+}
+
 /**
  * Offline squad analysis. A plausible 15-man team so the "My Team" view and its
  * Pro paywall are explorable with no FPL account and no network.

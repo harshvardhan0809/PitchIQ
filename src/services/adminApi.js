@@ -48,3 +48,13 @@ export function fetchAdminUsers() {
 export function setUserPlan(userId, plan) {
   return request('/api/admin/users/plan', { method: 'POST', json: { userId, plan } })
 }
+
+/** The editable app settings plus console diagnostics. */
+export function fetchAdminSettings() {
+  return request('/api/admin/settings')
+}
+
+/** Persist a partial settings patch; returns the sanitized, saved settings. */
+export function saveAdminSettings(patch) {
+  return request('/api/admin/settings', { method: 'POST', json: patch })
+}

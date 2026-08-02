@@ -14,11 +14,14 @@ import { PlayersToWatch } from '../components/PlayersToWatch'
 import { PlayerSearch } from '../components/PlayerSearch'
 import { AccountMenu } from '../components/AccountMenu'
 import { ProUpsell } from '../components/ProUpsell'
+import { AnnouncementBanner } from '../components/AnnouncementBanner'
 import { SideMenu } from '../components/SideMenu'
 import { useAuth, PLAN_NAMES } from '../lib/auth'
 import { useIsAdmin } from '../hooks/useIsAdmin'
 import { PlayerViewProvider } from '../lib/playerView'
 import { usePlayerView } from '../lib/playerViewContext'
+import { AppConfigProvider } from '../lib/appConfig'
+import { useAppConfig } from '../lib/appConfigContext'
 import '../App.css'
 
 // The intelligence views are code-split so the free matchday experience keeps a
@@ -35,6 +38,8 @@ const PriceWatch = lazy(() => import('../components/intel/PriceWatch')
   .then((module) => ({ default: module.PriceWatch })))
 const LeagueWarRoom = lazy(() => import('../components/intel/LeagueWarRoom')
   .then((module) => ({ default: module.LeagueWarRoom })))
+const ManagerMindset = lazy(() => import('../components/intel/ManagerMindset')
+  .then((module) => ({ default: module.ManagerMindset })))
 
 // Ordered top-to-bottom by how central each surface is to a weekly decision:
 // the free matchday home first, then your own team, the flagship captain call,
@@ -47,6 +52,7 @@ const VIEWS = [
   { id: 'briefing', label: 'Weekly Briefing', premium: true, icon: '📅', hint: 'Your gameweek in a minute' },
   { id: 'prices', label: 'Price Watch', premium: true, icon: '💰', hint: 'Tonight’s risers & fallers' },
   { id: 'league', label: 'War Room', premium: true, icon: '⚔️', hint: 'Spy on your mini-league' },
+  { id: 'manager', label: 'Manager Mindset', premium: true, icon: '🎯', hint: 'The gaffer’s game plan' },
   { id: 'differentials', label: 'Differentials', premium: true, icon: '💎', hint: 'Low-owned, high-upside picks' },
 ]
 
@@ -54,6 +60,7 @@ const INTEL_VIEWS = {
   briefing: { Component: WeeklyBriefing, loading: 'Loading Briefing…' },
   prices: { Component: PriceWatch, loading: 'Loading Price Watch…' },
   league: { Component: LeagueWarRoom, loading: 'Loading War Room…' },
+  manager: { Component: ManagerMindset, loading: 'Loading Manager Mindset…' },
   squad: { Component: SquadAnalyzer, loading: 'Loading My Team…' },
   captain: { Component: CaptainPicks, loading: 'Loading Captain AI…' },
   differentials: { Component: Differentials, loading: 'Loading Differentials…' },
@@ -87,19 +94,28 @@ function Failure({ error, onRetry }) {
 // dashboard overlay.
 export function ProductPage() {
   return (
-    <PlayerViewProvider>
-      <ProductBody />
-    </PlayerViewProvider>
+    <AppConfigProvider>
+      <PlayerViewProvider>
+        <ProductBody />
+      </PlayerViewProvider>
+    </AppConfigProvider>
   )
 }
 
 function ProductBody() {
   const { openPlayer } = usePlayerView()
   const { plan, signedIn } = useAuth()
+  const { features } = useAppConfig()
   const isAdmin = useIsAdmin()
   const [view, setView] = useState('matchday')
   const [menuOpen, setMenuOpen] = useState(false)
-  const activeView = VIEWS.find((item) => item.id === view) ?? VIEWS[0]
+
+  // Matchday is always available; any premium tile an admin has switched off in
+  // the console drops out of the navigation.
+  const visibleViews = VIEWS.filter((item) => item.id === 'matchday' || features[item.id] !== false)
+  // If the current view was just hidden, fall back to the matchday home.
+  const currentView = visibleViews.some((item) => item.id === view) ? view : 'matchday'
+  const activeView = visibleViews.find((item) => item.id === currentView) ?? visibleViews[0]
   const league = 'PL' // PitchIQ is Premier League only.
   const [query, setQuery] = useState('')
   const [reloadToken, setReloadToken] = useState(0)
@@ -124,6 +140,7 @@ function ProductBody() {
 
   return (
     <div className="app">
+      <AnnouncementBanner />
       <header className="topbar">
         <button
           className="menu-btn"
@@ -164,16 +181,16 @@ function ProductBody() {
       <SideMenu
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
-        views={VIEWS}
-        activeView={view}
+        views={visibleViews}
+        activeView={currentView}
         onSelectView={setView}
         isAdmin={isAdmin}
       />
 
       <main id="main">
-        {INTEL_VIEWS[view] ? (
+        {INTEL_VIEWS[currentView] ? (
           (() => {
-            const { Component, loading } = INTEL_VIEWS[view]
+            const { Component, loading } = INTEL_VIEWS[currentView]
             return (
               <ErrorBoundary>
                 <Suspense fallback={<Loading label={loading} />}>

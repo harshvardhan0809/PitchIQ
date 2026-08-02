@@ -1,6 +1,6 @@
 import { getPlan, getFreshAccessToken } from '../lib/auth'
 import { ApiError, usesLiveData } from './footballApi'
-import { demoCaptainBoard, demoDifferentials, demoSquad, demoBriefing, demoPriceWatch, demoLeague } from '../data/demoIntelligence'
+import { demoCaptainBoard, demoDifferentials, demoSquad, demoBriefing, demoPriceWatch, demoLeague, demoManager } from '../data/demoIntelligence'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? ''
 
@@ -66,6 +66,20 @@ export function fetchLeague(leagueId, entryId = '', league = 'PL') {
   const params = new URLSearchParams({ id, league })
   if (entry) params.set('entry', entry)
   return fetchBoard(`/api/intel/league?${params.toString()}`, () => demoLeague(getPlan()))
+}
+
+/**
+ * Manager's Mindset for a club. `teamId` is the FPL team id (1–20); when omitted
+ * the server picks a marquee side. The response also carries the full team list
+ * so the picker renders from the same call.
+ */
+export function fetchManager(teamId = '', league = 'PL') {
+  const id = String(teamId ?? '').trim()
+  if (!usesLiveData) return delay(demoManager(getPlan(), id))
+
+  const params = new URLSearchParams({ league })
+  if (id) params.set('team', id)
+  return fetchBoard(`/api/intel/manager?${params.toString()}`, () => demoManager(getPlan(), id))
 }
 
 /**

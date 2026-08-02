@@ -1101,3 +1101,79 @@ footer p { margin: 0; }
 @media (prefers-reduced-motion: reduce) {
   .side-menu-scrim, .side-menu { animation: none; }
 }
+
+/* Site-wide announcement banner (admin-tunable). Always-on scrolling marquee
+   that sits above the topbar and cannot be dismissed. Kept in the app's own
+   dark-glass system: a near-black bar, a subtle tone-tinted glow that drifts
+   across it, and the accent reserved for the icon-side rule and separators. */
+.app-note {
+  --note-edge: #0c110f;
+  position: relative;
+  overflow: hidden;
+  padding: 10px 0;
+  font-weight: 600;
+  font-size: 13.5px;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+  background-color: var(--note-edge);
+  background-image: linear-gradient(90deg, transparent, var(--note-tint), transparent);
+  background-size: 220% 100%;
+  background-repeat: no-repeat;
+  border-top: 1px solid var(--note-line);
+  border-bottom: 1px solid var(--note-line);
+  animation: note-sheen 9s linear infinite;
+}
+/* Soft fade at both edges so text glides in/out rather than clipping hard. */
+.app-note::before,
+.app-note::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 60px;
+  z-index: 2;
+  pointer-events: none;
+}
+.app-note::before { left: 0; background: linear-gradient(90deg, var(--note-edge), transparent); }
+.app-note::after { right: 0; background: linear-gradient(270deg, var(--note-edge), transparent); }
+
+.app-note-viewport { overflow: hidden; }
+.app-note-track {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  will-change: transform;
+  animation: note-scroll 28s linear infinite;
+}
+.app-note-item { display: inline-flex; align-items: center; }
+.app-note-ic { margin-right: 10px; font-size: 14px; }
+.app-note-sep { margin: 0 26px; font-size: 11px; color: var(--note-accent); opacity: 0.9; }
+.app-note-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+/* Tones stay on-palette: green for info/success (the brand accent), amber for
+   warnings — never a foreign hue. Only the tint and accent shift. */
+.app-note.tone-info {
+  --note-accent: #cfe0d8;
+  --note-tint: rgba(255, 255, 255, 0.07);
+  --note-line: rgba(255, 255, 255, 0.16);
+}
+.app-note.tone-success {
+  --note-accent: var(--green);
+  --note-tint: rgba(36, 214, 127, 0.16);
+  --note-line: rgba(36, 214, 127, 0.30);
+}
+.app-note.tone-warning {
+  --note-accent: var(--gold, #ffd15c);
+  --note-tint: rgba(255, 209, 92, 0.12);
+  --note-line: rgba(255, 209, 92, 0.26);
+}
+
+@keyframes note-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+@keyframes note-sheen { from { background-position: 120% 0; } to { background-position: -120% 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .app-note { animation: none; background-image: none; }
+  .app-note-track { animation: none; justify-content: center; width: 100%; }
+  .app-note-item:not(:first-child) { display: none; } /* show the message once, centred */
+  .app-note-sep { display: none; }
+}
