@@ -248,6 +248,78 @@ export const demoDashboards = {
   }),
 }
 
+// --- Team of the Gameweek (demo) -------------------------------------------
+function pick(id, name, team, teamShort, position, opp, home, difficulty, form, output, ownership) {
+  const parts = name.split(' ')
+  return {
+    id,
+    searchId: id,
+    name,
+    webName: parts[parts.length - 1],
+    initials: parts.map((word) => word[0]).slice(0, 2).join('').toUpperCase(),
+    photoUrl: null,
+    team,
+    teamShort,
+    teamCrestUrl: CREST,
+    position,
+    opponentShort: opp,
+    home,
+    difficulty,
+    fixture: `${home ? 'vs' : '@'} ${opp}`,
+    form,
+    output,
+    ownership,
+    availability: { code: 'available', label: 'Available' },
+  }
+}
+
+export function demoFormPicks() {
+  const groups = [
+    {
+      key: 'GKP', label: 'Goalkeepers', icon: '🧤', picks: [
+        pick('demo:raya', 'David Raya', 'Arsenal', 'ARS', 'GKP', 'BUR', true, 2, 5.4, 5.1, 28.3),
+        pick('demo:sanchez', 'Robert Sánchez', 'Chelsea', 'CHE', 'GKP', 'EVE', true, 2, 4.6, 4.7, 14.1),
+        pick('demo:pope', 'Nick Pope', 'Newcastle', 'NEW', 'GKP', 'BHA', false, 3, 4.2, 4.3, 9.7),
+      ],
+    },
+    {
+      key: 'DEF', label: 'Defenders', icon: '🛡️', picks: [
+        pick('demo:gabriel', 'Gabriel', 'Arsenal', 'ARS', 'DEF', 'BUR', true, 2, 5.9, 6.2, 34.5),
+        pick('demo:vvd', 'Virgil van Dijk', 'Liverpool', 'LIV', 'DEF', 'WOL', true, 2, 5.1, 5.6, 21.8),
+        pick('demo:trippier', 'Kieran Trippier', 'Newcastle', 'NEW', 'DEF', 'BHA', false, 3, 4.8, 5.0, 12.4),
+        pick('demo:gvardiol', 'Joško Gvardiol', 'Man City', 'MCI', 'DEF', 'CHE', true, 3, 4.5, 4.9, 18.0),
+        pick('demo:hall', 'Lewis Hall', 'Newcastle', 'NEW', 'DEF', 'BHA', false, 3, 4.3, 4.6, 7.2),
+      ],
+    },
+    {
+      key: 'MID', label: 'Midfielders', icon: '🎯', picks: [
+        pick('demo:palmer', 'Cole Palmer', 'Chelsea', 'CHE', 'MID', 'EVE', true, 2, 7.8, 7.4, 46.2),
+        pick('demo:saka', 'Bukayo Saka', 'Arsenal', 'ARS', 'MID', 'BUR', true, 2, 6.9, 6.8, 41.0),
+        pick('demo:mbeumo', 'Bryan Mbeumo', 'Man Utd', 'MUN', 'MID', 'FUL', true, 2, 6.4, 6.1, 29.5),
+        pick('demo:son', 'Son Heung-min', 'Spurs', 'TOT', 'MID', 'WHU', false, 3, 5.7, 5.8, 22.1),
+        pick('demo:gordon', 'Anthony Gordon', 'Newcastle', 'NEW', 'MID', 'BHA', false, 3, 5.2, 5.4, 15.6),
+      ],
+    },
+    {
+      key: 'FWD', label: 'Forwards', icon: '⚡', picks: [
+        pick('demo:haaland', 'Erling Haaland', 'Man City', 'MCI', 'FWD', 'CHE', true, 3, 8.1, 8.6, 62.4),
+        pick('demo:isak', 'Alexander Isak', 'Newcastle', 'NEW', 'FWD', 'BHA', false, 3, 6.6, 6.3, 27.9),
+        pick('demo:watkins', 'Ollie Watkins', 'Aston Villa', 'AVL', 'FWD', 'NFO', true, 2, 6.1, 6.0, 24.3),
+        pick('demo:woltemade', 'Nick Woltemade', 'Newcastle', 'NEW', 'FWD', 'BHA', false, 3, 5.5, 5.2, 11.0),
+        pick('demo:wissa', 'Yoane Wissa', 'Brentford', 'BRE', 'FWD', 'CRY', true, 3, 5.0, 4.9, 13.7),
+      ],
+    },
+  ]
+  const best = { ...groups[3].picks[0], tag: 'Star of the Gameweek' } // Haaland
+  return {
+    heading: 'Team of the Gameweek',
+    subheading: 'Projected output for Matchday 12, fixture by fixture',
+    gameweek: 12,
+    best,
+    groups,
+  }
+}
+
 export function demoSpotlight(league = 'PL') {
   const option = { PL: 'Premier League', PD: 'La Liga', SA: 'Serie A', BL1: 'Bundesliga', FL1: 'Ligue 1' }
   return {
@@ -277,6 +349,7 @@ export function demoSpotlight(league = 'PL') {
       isPreviousSeason: false,
       items: DEMO_WATCH,
     },
+    formPicks: demoFormPicks(),
   }
 }
 

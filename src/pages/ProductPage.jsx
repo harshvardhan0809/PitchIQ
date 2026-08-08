@@ -11,6 +11,7 @@ import { useAsync, useDebounced } from '../hooks/useAsync'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { MatchdayPanel } from '../components/MatchdayPanel'
 import { PlayersToWatch } from '../components/PlayersToWatch'
+import { FormPicks } from '../components/FormPicks'
 import { PlayerSearch } from '../components/PlayerSearch'
 import { AccountMenu } from '../components/AccountMenu'
 import { ProUpsell } from '../components/ProUpsell'
@@ -221,6 +222,7 @@ function ProductBody() {
                     competitionName={spotlight.data.competition.name}
                     matches={spotlight.data.matches}
                   />
+                  <FormPicks formPicks={spotlight.data.formPicks} />
                   <PlayersToWatch
                     onSelect={handleSelect}
                     playersToWatch={spotlight.data.playersToWatch}

@@ -214,6 +214,7 @@ export function projectPlayer(element, ctx) {
     fixtureRun,
     fixtureScore: fixtureRunScore(fixtureRun),
     xgi90: Number(xgi90.toFixed(2)),
+    form: Number(toNumber(element.form, 0).toFixed(1)),
     expectedPoints: Number(xPts.toFixed(1)),
     captainScore: Number(captainScore.toFixed(2)),
     confidence,

@@ -83,6 +83,69 @@ function toWatchItem(player, teamsById) {
   }
 }
 
+/** A single Team-of-the-Gameweek pick, shaped for the home cards. */
+function toPickItem(player, teamsById) {
+  const team = teamsById.get(player.teamId)
+  const status = player.availability?.status ?? 'a'
+  const next = player.next
+  return {
+    id: player.id,
+    searchId: player.id,
+    name: player.name,
+    webName: player.webName ?? player.name,
+    initials: initials(player.name),
+    photoUrl: player.photoUrl,
+    team: player.team,
+    teamShort: player.teamShort,
+    teamCrestUrl: team?.code ? teamCrestUrl(team.code) : null,
+    position: player.position,
+    opponentShort: next?.opponent ?? null,
+    home: next?.home ?? null,
+    difficulty: next?.difficulty ?? null,
+    fixture: next ? `${next.home ? 'vs' : '@'} ${next.opponent}` : 'No fixture',
+    form: player.form ?? 0, // recent scoring form (FPL)
+    output: player.expectedPoints, // projected points for this gameweek
+    ownership: Number(player.ownership ?? 0),
+    availability: {
+      code: AVAILABILITY_CODE[status] ?? 'available',
+      label: player.availability?.label ?? 'Available',
+    },
+  }
+}
+
+/**
+ * Team of the Gameweek: the highest projected performers per position for the
+ * upcoming round, plus the single best pick overall. Every projection already
+ * accounts for that player's actual fixture (opponent difficulty, home/away), so
+ * these are per-gameweek "output" numbers, not season averages.
+ */
+function buildFormPicks(projection, teamsById, event) {
+  const eligible = projection.players.filter((player) => player.playProb >= 0.4 && player.next)
+
+  const topPicks = (position, count) => eligible
+    .filter((player) => player.position === position)
+    .sort((left, right) => right.expectedPoints - left.expectedPoints)
+    .slice(0, count)
+    .map((player) => toPickItem(player, teamsById))
+
+  const groups = [
+    { key: 'GKP', label: 'Goalkeepers', icon: '🧤', picks: topPicks('GKP', 3) },
+    { key: 'DEF', label: 'Defenders', icon: '🛡️', picks: topPicks('DEF', 5) },
+    { key: 'MID', label: 'Midfielders', icon: '🎯', picks: topPicks('MID', 5) },
+    { key: 'FWD', label: 'Forwards', icon: '⚡', picks: topPicks('FWD', 5) },
+  ]
+
+  const best = [...eligible].sort((left, right) => right.expectedPoints - left.expectedPoints)[0]
+
+  return {
+    heading: 'Team of the Gameweek',
+    subheading: event ? `Projected output for ${event.name}, fixture by fixture` : 'Projected output for the next round',
+    gameweek: event?.id ?? null,
+    best: best ? { ...toPickItem(best, teamsById), tag: 'Star of the Gameweek' } : null,
+    groups,
+  }
+}
+
 export async function getSpotlight({ fpl }) {
   const [bootstrap, fixtures, projection] = await Promise.all([
     fpl.getBootstrap(),
@@ -137,5 +200,6 @@ export async function getSpotlight({ fpl }) {
       subheading: event ? `Top projected performers for ${event.name}` : 'Top projected performers',
       items: watch,
     },
+    formPicks: buildFormPicks(projection, teamsById, event),
   }
 }
