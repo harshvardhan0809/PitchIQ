@@ -27,6 +27,12 @@ const REVOKING_EVENTS = new Set([
   'subscription.expired', 'subscription.paused',
 ])
 
+// Subscription *statuses* (from the Subscriptions API) that mean the mandate is
+// authorized and the user should hold Pro. Checked when confirming a checkout
+// directly, so entitlement doesn't have to wait on a webhook (which can't reach
+// localhost, and needs dashboard setup in production).
+const ACTIVE_STATUSES = new Set(['authenticated', 'active', 'charged', 'resumed'])
+
 export class RazorpayClient {
   constructor({ keyId, keySecret, webhookSecret, planId } = {}) {
     this.keyId = keyId ?? ''
@@ -80,6 +86,31 @@ export class RazorpayClient {
       throw new HttpError(message, response.status >= 500 ? 502 : 400)
     }
     return body // { id, status, short_url, ... }
+  }
+
+  /** Fetch a subscription's current state from Razorpay (server-to-server). */
+  async getSubscription(subscriptionId) {
+    if (!this.configured) throw new HttpError('Billing is not configured on this server.', 503)
+    if (!subscriptionId) throw new HttpError('A subscription id is required.', 400)
+    let response
+    try {
+      response = await fetch(`${API_BASE}/subscriptions/${encodeURIComponent(subscriptionId)}`, {
+        headers: { Authorization: this.authHeader },
+      })
+    } catch {
+      throw new HttpError('Could not reach the payment provider.', 502)
+    }
+    const body = await response.json().catch(() => null)
+    if (!response.ok) {
+      const message = body?.error?.description ?? 'Could not look up the subscription.'
+      throw new HttpError(message, response.status >= 500 ? 502 : 400)
+    }
+    return body // { id, status, notes, ... }
+  }
+
+  /** Whether a subscription status means the user should currently hold Pro. */
+  isActiveStatus(status) {
+    return ACTIVE_STATUSES.has(String(status ?? '').toLowerCase())
   }
 
   /**

@@ -30,6 +30,32 @@ export async function createSubscription() {
   return body
 }
 
+/**
+ * Ask the server to confirm a completed checkout directly with Razorpay and
+ * grant Pro if the mandate is active — no webhook round-trip needed. Returns
+ * { activated, plan, status }. Safe to call even if the webhook also fires.
+ */
+export async function confirmSubscription(subscriptionId) {
+  if (!usesLiveData) throw new ApiError('Subscriptions need the live API server (npm run api).', 0)
+  const token = await getFreshAccessToken()
+  let response
+  try {
+    response = await fetch(`${API_BASE}/api/billing/confirm`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token && token !== 'demo' ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ subscriptionId }),
+    })
+  } catch {
+    throw new ApiError('Could not reach the server to confirm your subscription.', 0)
+  }
+  const body = await response.json().catch(() => null)
+  if (!response.ok) throw new ApiError(body?.error ?? 'Could not confirm the subscription.', response.status)
+  return body
+}
+
 // Load Razorpay Checkout once, lazily, and reuse it.
 let checkoutPromise = null
 function loadCheckout() {

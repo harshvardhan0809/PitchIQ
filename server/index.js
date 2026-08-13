@@ -57,7 +57,7 @@ loadEnvFile()
 
 // Identifies the running code so a stale `node server/index.js` is detectable
 // at /api/health and in the startup log. Bump on behaviour changes.
-const SERVER_BUILD = '2026-08-02-admin-settings'
+const SERVER_BUILD = '2026-08-02-billing-confirm'
 
 const port = Number(process.env.PORT ?? process.env.API_PORT ?? 3001)
 const host = process.env.API_HOST ?? '0.0.0.0'
@@ -343,6 +343,36 @@ async function handleSubscribe(request) {
     status: subscription.status,
     shortUrl: subscription.short_url ?? null,
   }
+}
+
+/**
+ * Confirm a just-completed checkout without waiting on the webhook. The server
+ * fetches the subscription straight from Razorpay (authoritative — the browser
+ * is never trusted), checks it belongs to the signed-in user, and grants Pro if
+ * the mandate is authorized/active. The webhook still handles later renewals and
+ * cancellations; this only removes the "webhook can't reach localhost" gap so a
+ * paid user gets access immediately.
+ */
+async function handleBillingConfirm(request) {
+  const user = await supabaseAuth.getUser(bearerToken(request))
+  if (!user) throw new HttpError('Please sign in.', 401)
+  const body = await readJsonBody(request)
+  const subscriptionId = String(body.subscriptionId ?? '').trim()
+  if (!subscriptionId) throw new HttpError('A subscription id is required.', 400)
+
+  const subscription = await razorpay.getSubscription(subscriptionId)
+  // A user may only confirm their OWN subscription — the id in Razorpay's notes
+  // must match the caller, so nobody can activate off someone else's payment.
+  if (subscription?.notes?.userId && subscription.notes.userId !== user.id) {
+    throw new HttpError('That subscription belongs to a different account.', 403)
+  }
+
+  const active = razorpay.isActiveStatus(subscription?.status)
+  if (active) {
+    await supabaseAuth.setPlan(user.id, 'pro')
+    return { activated: true, plan: 'pro', status: subscription.status }
+  }
+  return { activated: false, plan: user.plan, status: subscription?.status ?? 'unknown' }
 }
 
 /**
@@ -788,6 +818,7 @@ const POST_ROUTES = {
   '/api/admin/users/plan': handleAdminSetPlan,
   '/api/admin/settings': handleAdminSaveSettings,
   '/api/billing/subscribe': handleSubscribe,
+  '/api/billing/confirm': handleBillingConfirm,
   '/api/profile': handleUpdateProfile,
 }
 

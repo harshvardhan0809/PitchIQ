@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { MarketingNav, MarketingFooter } from '../components/MarketingNav'
 import { useAuth, refreshSession, getPlan } from '../lib/auth'
 import { planMeets } from '../lib/plan'
-import { createSubscription, openCheckout } from '../services/billingApi'
+import { createSubscription, openCheckout, confirmSubscription } from '../services/billingApi'
 import '../styles/marketing.css'
 
 const TIERS = [
@@ -64,7 +64,17 @@ export function PricingPage() {
         email: user?.email,
       })
       setFlow({ tone: 'good', text: 'Payment received — activating your Pro access…' })
-      await waitForPro()
+      // Confirm directly with Razorpay so activation doesn't depend on the webhook
+      // reaching this server (it can't on localhost). Non-fatal if it can't yet.
+      try {
+        await confirmSubscription(subscription.subscriptionId)
+        await refreshSession()
+      } catch { /* fall back to webhook + polling below */ }
+      const activated = await waitForPro()
+      if (!activated) {
+        setFlow({ tone: 'bad', text: 'Payment went through, but activation is still pending. It can take a minute — refresh shortly, or contact support if it persists.' })
+        return
+      }
       navigate('/app')
     } catch (error) {
       // Billing not live yet → let them know rather than failing silently.
