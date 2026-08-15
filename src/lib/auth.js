@@ -16,6 +16,7 @@ import { loadSupabase, supabaseConfigured } from './supabaseClient'
  */
 const CHANGE_EVENT = 'pitchiq-auth-change'
 const DEMO_KEY = 'pitchiq_demo_auth'
+const API_BASE = import.meta.env.VITE_API_URL ?? ''
 export const PLAN_NAMES = { free: 'Free', pro: 'Pro' }
 
 // Two tiers now; a legacy 'elite' session maps to 'pro' so access is preserved.
@@ -109,9 +110,14 @@ if (supabaseConfigured) {
         } catch {
           publish(fromSession(data.session))
         }
+        // Token app_metadata is not authoritative for the plan — ask the server.
+        refreshPlanFromServer()
       })
       .catch(() => publish({ ...snapshot, ready: true }))
-    supabase.auth.onAuthStateChange((_event, session) => publish(fromSession(session)))
+    supabase.auth.onAuthStateChange((_event, session) => {
+      publish(fromSession(session))
+      if (session) refreshPlanFromServer()
+    })
   })
 } else {
   const demo = readDemo()
@@ -201,6 +207,28 @@ export async function refreshSession() {
   try {
     const { data } = await supabase.auth.refreshSession()
     if (data?.session) publish(fromSession(data.session))
+  } catch { /* keep the current snapshot */ }
+  // The plan is authoritative on the server, not in the token — sync it too.
+  return refreshPlanFromServer()
+}
+
+/**
+ * Sync the displayed plan with the server's AUTHORITATIVE entitlement. The server
+ * reads the live subscriptions table (GET /api/auth/me), so this — not the JWT's
+ * app_metadata — is the source of truth for what the UI shows. Security is
+ * unaffected: every gated API call is re-checked server-side regardless of what
+ * the client believes. A no-op in demo/offline mode.
+ */
+export async function refreshPlanFromServer() {
+  if (!supabaseConfigured) return getPlan()
+  const token = await getFreshAccessToken()
+  if (!token || token === 'demo') return getPlan()
+  try {
+    const res = await fetch(`${API_BASE}/api/auth/me`, { headers: { Authorization: `Bearer ${token}` } })
+    if (res.ok) {
+      const body = await res.json().catch(() => null)
+      if (body?.user?.plan) setLocalPlan(body.user.plan)
+    }
   } catch { /* keep the current snapshot */ }
   return getPlan()
 }

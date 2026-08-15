@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MarketingNav, MarketingFooter } from '../components/MarketingNav'
-import { useAuth, refreshSession, getPlan } from '../lib/auth'
+import { useAuth, refreshPlanFromServer, getPlan } from '../lib/auth'
 import { planMeets } from '../lib/plan'
 import { createSubscription, openCheckout, confirmSubscription } from '../services/billingApi'
 import '../styles/marketing.css'
@@ -34,12 +34,12 @@ const TIERS = [
   },
 ]
 
-// After checkout the plan is flipped by the webhook, which can lag a moment.
-// Refresh the session a few times until Pro shows, then continue.
+// After checkout, poll the server's authoritative plan (which reads the live
+// subscriptions table) a few times until Pro shows, then continue.
 async function waitForPro(attempts = 6, delayMs = 1500) {
   for (let index = 0; index < attempts; index += 1) {
     if (getPlan() !== 'free') return true
-    await refreshSession()
+    await refreshPlanFromServer()
     if (getPlan() !== 'free') return true
     await new Promise((resolve) => { setTimeout(resolve, delayMs) })
   }
@@ -74,7 +74,7 @@ export function PricingPage() {
           signature: checkout?.signature,
         })
         if (result?.activated) {
-          await refreshSession()
+          await refreshPlanFromServer()
           if (getPlan() !== 'free') { navigate('/app'); return }
         }
       } catch { /* fall back to webhook + polling below */ }
