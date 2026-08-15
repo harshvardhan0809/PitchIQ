@@ -35,7 +35,7 @@ export async function createSubscription() {
  * grant Pro if the mandate is active — no webhook round-trip needed. Returns
  * { activated, plan, status }. Safe to call even if the webhook also fires.
  */
-export async function confirmSubscription(subscriptionId) {
+export async function confirmSubscription({ subscriptionId, paymentId = null, signature = null }) {
   if (!usesLiveData) throw new ApiError('Subscriptions need the live API server (npm run api).', 0)
   const token = await getFreshAccessToken()
   let response
@@ -46,7 +46,7 @@ export async function confirmSubscription(subscriptionId) {
         'Content-Type': 'application/json',
         ...(token && token !== 'demo' ? { Authorization: `Bearer ${token}` } : {}),
       },
-      body: JSON.stringify({ subscriptionId }),
+      body: JSON.stringify({ subscriptionId, paymentId, signature }),
     })
   } catch {
     throw new ApiError('Could not reach the server to confirm your subscription.', 0)
@@ -87,7 +87,13 @@ export async function openCheckout({ subscriptionId, keyId, email }) {
       description: 'PitchIQ Pro subscription',
       prefill: { email: email ?? '' },
       theme: { color: '#24d67f' },
-      handler: () => resolve({ completed: true }),
+      // The success payload carries the signed proof of payment; pass it back so
+      // the server can verify and activate Pro instantly.
+      handler: (response) => resolve({
+        completed: true,
+        paymentId: response?.razorpay_payment_id ?? null,
+        signature: response?.razorpay_signature ?? null,
+      }),
       modal: { ondismiss: () => reject(new ApiError('Checkout closed before payment.', 0)) },
     })
     checkout.on('payment.failed', (event) => {

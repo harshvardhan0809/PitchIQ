@@ -58,21 +58,29 @@ export function PricingPage() {
     try {
       const subscription = await createSubscription()
       if (subscription.alreadyPro) { navigate('/app'); return }
-      await openCheckout({
+      const checkout = await openCheckout({
         subscriptionId: subscription.subscriptionId,
         keyId: subscription.keyId,
         email: user?.email,
       })
       setFlow({ tone: 'good', text: 'Payment received — activating your Pro access…' })
       // Confirm directly with Razorpay so activation doesn't depend on the webhook
-      // reaching this server (it can't on localhost). Non-fatal if it can't yet.
+      // reaching this server (it can't on localhost). The signed Checkout payload
+      // lets the server grant Pro instantly; refresh the session to pick it up.
       try {
-        await confirmSubscription(subscription.subscriptionId)
-        await refreshSession()
+        const result = await confirmSubscription({
+          subscriptionId: subscription.subscriptionId,
+          paymentId: checkout?.paymentId,
+          signature: checkout?.signature,
+        })
+        if (result?.activated) {
+          await refreshSession()
+          if (getPlan() !== 'free') { navigate('/app'); return }
+        }
       } catch { /* fall back to webhook + polling below */ }
       const activated = await waitForPro()
       if (!activated) {
-        setFlow({ tone: 'bad', text: 'Payment went through, but activation is still pending. It can take a minute — refresh shortly, or contact support if it persists.' })
+        setFlow({ tone: 'bad', text: 'Payment went through, but activation is still pending. Make sure the API server is running the latest build, then refresh — or contact support if it persists.' })
         return
       }
       navigate('/app')

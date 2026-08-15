@@ -57,7 +57,7 @@ loadEnvFile()
 
 // Identifies the running code so a stale `node server/index.js` is detectable
 // at /api/health and in the startup log. Bump on behaviour changes.
-const SERVER_BUILD = '2026-08-02-billing-confirm'
+const SERVER_BUILD = '2026-08-15-billing-signature'
 
 const port = Number(process.env.PORT ?? process.env.API_PORT ?? 3001)
 const host = process.env.API_HOST ?? '0.0.0.0'
@@ -360,6 +360,17 @@ async function handleBillingConfirm(request) {
   const subscriptionId = String(body.subscriptionId ?? '').trim()
   if (!subscriptionId) throw new HttpError('A subscription id is required.', 400)
 
+  // Fast path: if Checkout handed back a signed success payload, verify it. A
+  // valid signature is proof the payment is genuine, so Pro is granted instantly
+  // without waiting on Razorpay's subscription status to propagate.
+  const paymentId = String(body.paymentId ?? '').trim()
+  const signature = String(body.signature ?? '').trim()
+  if (paymentId && signature && razorpay.verifySubscriptionPayment({ paymentId, subscriptionId, signature })) {
+    await supabaseAuth.setPlan(user.id, 'pro')
+    return { activated: true, plan: 'pro', via: 'signature' }
+  }
+
+  // Fallback: independently ask Razorpay for the subscription's current state.
   const subscription = await razorpay.getSubscription(subscriptionId)
   // A user may only confirm their OWN subscription — the id in Razorpay's notes
   // must match the caller, so nobody can activate off someone else's payment.
@@ -367,10 +378,9 @@ async function handleBillingConfirm(request) {
     throw new HttpError('That subscription belongs to a different account.', 403)
   }
 
-  const active = razorpay.isActiveStatus(subscription?.status)
-  if (active) {
+  if (razorpay.isActiveStatus(subscription?.status)) {
     await supabaseAuth.setPlan(user.id, 'pro')
-    return { activated: true, plan: 'pro', status: subscription.status }
+    return { activated: true, plan: 'pro', via: 'status', status: subscription.status }
   }
   return { activated: false, plan: user.plan, status: subscription?.status ?? 'unknown' }
 }

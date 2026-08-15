@@ -114,6 +114,20 @@ export class RazorpayClient {
   }
 
   /**
+   * Verify the signature Checkout returns to the browser on a successful
+   * subscription authorization. For subscriptions Razorpay signs
+   * `payment_id|subscription_id` with the key secret. A valid signature proves
+   * the payment is genuine, so Pro can be granted instantly — no webhook needed.
+   */
+  verifySubscriptionPayment({ paymentId, subscriptionId, signature }) {
+    if (!this.configured || !paymentId || !subscriptionId || !signature) return false
+    const expected = createHmac('sha256', this.keySecret).update(`${paymentId}|${subscriptionId}`).digest('hex')
+    const a = Buffer.from(expected, 'utf8')
+    const b = Buffer.from(String(signature), 'utf8')
+    return a.length === b.length && timingSafeEqual(a, b)
+  }
+
+  /**
    * Verify a webhook came from Razorpay: HMAC-SHA256 of the raw body with the
    * webhook secret must equal the X-Razorpay-Signature header. Constant-time
    * compare so a mismatch can't be timed.
