@@ -13,6 +13,10 @@ const PricingPage = lazy(() => import('./pages/PricingPage')
   .then((module) => ({ default: module.PricingPage })))
 const AdminPage = lazy(() => import('./pages/AdminPage')
   .then((module) => ({ default: module.AdminPage })))
+const AccountPage = lazy(() => import('./pages/AccountPage')
+  .then((module) => ({ default: module.AccountPage })))
+const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage')
+  .then((module) => ({ default: module.ResetPasswordPage })))
 
 function RouteFallback() {
   return (
@@ -62,9 +66,13 @@ export default function App() {
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
+        {/* Password-reset landing from the emailed recovery link. */}
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/pricing" element={<PricingPage />} />
         {/* The product requires an account. */}
         <Route path="/app" element={<RequireAuth><ProductPage /></RequireAuth>} />
+        {/* Account settings — profile + password, sign-in required. */}
+        <Route path="/account" element={<RequireAuth><AccountPage /></RequireAuth>} />
         {/* Admin console — hidden from non-admins (they're bounced to /app). */}
         <Route path="/admin" element={<RequireAdmin><AdminPage /></RequireAdmin>} />
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -55,6 +55,10 @@ export function AccountMenu() {
             </Link>
           )}
 
+          <Link className="acct-link" to="/account" onClick={() => setOpen(false)}>
+            Manage account
+          </Link>
+
           <button type="button" className="acct-signout" onClick={() => signOut().then(() => setOpen(false))}>
             Sign out
           </button>

@@ -30,6 +30,8 @@ export function LoginPage() {
         setMessage({ tone: 'good', text: 'Account created — check your email to confirm, then sign in.' })
       } else if (result?.magicLinkSent) {
         setMessage({ tone: 'good', text: 'Magic link sent. Check your email to finish signing in.' })
+      } else if (result?.resetSent) {
+        setMessage({ tone: 'good', text: 'If that email has an account, a password-reset link is on its way.' })
       } else if (redirect) {
         navigate(next, { replace: true })
       }
@@ -100,7 +102,15 @@ export function LoginPage() {
 
             {auth.configured && (
               <div className="auth-field">
-                <label htmlFor="password">Password</label>
+                <div className="auth-field-top">
+                  <label htmlFor="password">Password</label>
+                  {mode === 'signin' && (
+                    <button type="button" className="auth-forgot" disabled={busy}
+                      onClick={() => run(() => auth.sendPasswordReset(email), { redirect: false })}>
+                      Forgot password?
+                    </button>
+                  )}
+                </div>
                 <input id="password" type="password" value={password}
                   autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} required minLength={6}
                   placeholder={mode === 'signup' ? 'At least 6 characters' : '••••••••'}

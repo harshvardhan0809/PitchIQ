@@ -146,6 +146,10 @@
   color: var(--ink); font: inherit; font-size: .95rem; outline: none;
 }
 .auth-field input:focus { border-color: var(--accent); }
+.auth-field-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.auth-forgot { background: none; border: 0; color: var(--accent); font: inherit; font-size: .78rem; cursor: pointer; padding: 0; }
+.auth-forgot:hover { text-decoration: underline; text-underline-offset: 3px; }
+.auth-forgot:disabled { opacity: .5; cursor: default; }
 .auth-submit { margin-top: 4px; width: 100%; justify-content: center; }
 .auth-alt { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
 .auth-divider { display: flex; align-items: center; gap: 12px; color: var(--faint); font-size: .8rem; margin: 4px 0; }

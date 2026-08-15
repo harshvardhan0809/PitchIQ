@@ -35,7 +35,7 @@ function publish(next) {
 function fromSession(session) {
   const user = session?.user ?? null
   return {
-    user: user ? { id: user.id, email: user.email } : null,
+    user: user ? { id: user.id, email: user.email, createdAt: user.created_at ?? null } : null,
     plan: normalizePlan(user?.app_metadata?.plan),
     token: session?.access_token ?? null,
     ready: true,
@@ -211,6 +211,63 @@ export async function signOut() {
   await supabase.auth.signOut()
 }
 
+/**
+ * Send a password-reset email. Supabase mails a recovery link that returns to
+ * /reset-password with a temporary session, where the user sets a new password.
+ * Always resolves the same way whether or not the email exists, so this can't be
+ * used to probe which addresses have accounts.
+ */
+export async function sendPasswordReset(email) {
+  if (!supabaseConfigured) throw new Error('Password reset requires an account.')
+  if (!EMAIL_RE.test(String(email ?? '').trim())) throw new Error('Enter a valid email address.')
+  const supabase = await loadSupabase()
+  const { error } = await supabase.auth.resetPasswordForEmail(String(email).trim(), {
+    redirectTo: `${window.location.origin}/reset-password`,
+  })
+  if (error) throw new Error(error.message)
+  return { resetSent: true }
+}
+
+/**
+ * Set a new password during a reset. Runs on /reset-password, where the recovery
+ * link has already established a temporary session, so it only needs the new
+ * password (no current-password check — the emailed link is the proof).
+ */
+export async function completePasswordReset(newPassword) {
+  if (!supabaseConfigured) throw new Error('Password reset requires an account.')
+  if (!newPassword || newPassword.length < MIN_PASSWORD) {
+    throw new Error(`Password must be at least ${MIN_PASSWORD} characters.`)
+  }
+  const supabase = await loadSupabase()
+  const { error } = await supabase.auth.updateUser({ password: newPassword })
+  if (error) throw new Error(error.message)
+  return {}
+}
+
+/**
+ * Change the signed-in user's password. The current password is re-verified
+ * first (Supabase's updateUser alone doesn't check it), so a walked-away session
+ * can't be used to silently reset the password.
+ */
+export async function changePassword(currentPassword, newPassword) {
+  if (!supabaseConfigured) throw new Error('Changing your password requires an account.')
+  const email = snapshot.user?.email
+  if (!email) throw new Error('Please sign in again to change your password.')
+  if (!newPassword || newPassword.length < MIN_PASSWORD) {
+    throw new Error(`New password must be at least ${MIN_PASSWORD} characters.`)
+  }
+  if (currentPassword === newPassword) throw new Error('Choose a password different from your current one.')
+
+  const supabase = await loadSupabase()
+  // Re-authenticate to confirm the current password before allowing the change.
+  const { error: reauthError } = await supabase.auth.signInWithPassword({ email, password: currentPassword })
+  if (reauthError) throw new Error('Your current password is incorrect.')
+
+  const { error } = await supabase.auth.updateUser({ password: newPassword })
+  if (error) throw new Error(error.message)
+  return {}
+}
+
 function demoSignIn(email) {
   const user = { email, plan: 'free' }
   writeDemo({ user }); demoPublish(user)
@@ -240,5 +297,8 @@ export function useAuth() {
     signInWithMagicLink,
     signInWithGoogle,
     signOut,
+    changePassword,
+    sendPasswordReset,
+    completePasswordReset,
   }
 }

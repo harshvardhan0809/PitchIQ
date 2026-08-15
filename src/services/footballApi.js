@@ -51,6 +51,21 @@ export async function fetchSpotlight(league = 'PL') {
   return request(`/api/spotlight?league=${encodeURIComponent(league)}`)
 }
 
+// A compact demo club list so the favourite-club picker works offline too.
+const DEMO_TEAMS = [
+  ['Arsenal', 'ARS'], ['Aston Villa', 'AVL'], ['Bournemouth', 'BOU'], ['Brentford', 'BRE'],
+  ['Brighton', 'BHA'], ['Chelsea', 'CHE'], ['Crystal Palace', 'CRY'], ['Everton', 'EVE'],
+  ['Fulham', 'FUL'], ['Liverpool', 'LIV'], ['Man City', 'MCI'], ['Man Utd', 'MUN'],
+  ['Newcastle', 'NEW'], ["Nott'm Forest", 'NFO'], ['Tottenham', 'TOT'], ['West Ham', 'WHU'],
+  ['Wolves', 'WOL'],
+].map(([name, shortName], index) => ({ id: index + 1, name, shortName }))
+
+/** The Premier League clubs for pickers. Falls back to a demo list offline. */
+export async function fetchTeams() {
+  if (!usesLiveData) return delay({ teams: DEMO_TEAMS })
+  return request('/api/teams')
+}
+
 export async function searchPlayers(query = '', league = 'PL') {
   if (!usesLiveData) return delay(demoSearchResults(query, league))
 

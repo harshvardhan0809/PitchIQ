@@ -655,6 +655,19 @@ const routes = [
     },
   },
   {
+    // The Premier League clubs, for pickers (e.g. the profile's favourite club).
+    // Public, lightly cached — just id, name and short code from the FPL bootstrap.
+    pattern: /^\/api\/teams$/,
+    cacheControl: 'public, max-age=3600',
+    handle: async () => {
+      const bootstrap = await fpl.getBootstrap()
+      const teams = (bootstrap.teams ?? [])
+        .map((team) => ({ id: team.id, name: team.name, shortName: team.short_name }))
+        .sort((a, b) => a.name.localeCompare(b.name))
+      return { teams }
+    },
+  },
+  {
     // Matchday — Premier League, straight from the FPL API.
     pattern: /^\/api\/spotlight$/,
     cacheControl: 'public, max-age=60',
