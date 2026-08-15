@@ -24,9 +24,22 @@ create table if not exists public.subscriptions (
   status                   text not null default 'inactive', -- active|inactive|cancelled|past_due
   provider                 text,          -- 'razorpay'
   provider_subscription_id text,
-  current_period_end       timestamptz,
+  current_period_end       timestamptz,   -- paid entitlement expiry (lazy revoke past this)
+  last_event_at            timestamptz,   -- provider event time last applied (ordering guard)
   created_at               timestamptz not null default now(),
   updated_at               timestamptz not null default now()
+);
+-- Add the ordering column to pre-existing installs (idempotent).
+alter table public.subscriptions add column if not exists last_event_at timestamptz;
+
+-- 2c) BILLING_EVENTS — webhook idempotency ledger. One row per provider event id;
+-- a duplicate delivery hits the primary key and is skipped. Server-only (no RLS
+-- policies), like subscriptions.
+create table if not exists public.billing_events (
+  event_id         text primary key,   -- provider's x-razorpay-event-id
+  event_type       text,
+  event_created_at timestamptz,
+  received_at      timestamptz not null default now()
 );
 
 -- 2b) APP_SETTINGS — admin-tuned, app-wide config (ad cadence & copy, the
@@ -39,9 +52,11 @@ create table if not exists public.app_settings (
 );
 
 -- 3) Row-level security
-alter table public.profiles      enable row level security;
-alter table public.subscriptions enable row level security;
-alter table public.app_settings  enable row level security;
+alter table public.profiles       enable row level security;
+alter table public.subscriptions  enable row level security;
+alter table public.app_settings   enable row level security;
+alter table public.billing_events enable row level security;
+-- billing_events has NO client policies: only the service_role (server) touches it.
 
 -- profiles: a user reads/updates/inserts ONLY their own row
 drop policy if exists profiles_select_own on public.profiles;

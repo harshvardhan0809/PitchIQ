@@ -57,7 +57,7 @@ loadEnvFile()
 
 // Identifies the running code so a stale `node server/index.js` is detectable
 // at /api/health and in the startup log. Bump on behaviour changes.
-const SERVER_BUILD = '2026-08-15-billing-signature'
+const SERVER_BUILD = '2026-08-15-entitlement-hardening'
 
 const port = Number(process.env.PORT ?? process.env.API_PORT ?? 3001)
 const host = process.env.API_HOST ?? '0.0.0.0'
@@ -346,12 +346,20 @@ async function handleSubscribe(request) {
 }
 
 /**
- * Confirm a just-completed checkout without waiting on the webhook. The server
- * fetches the subscription straight from Razorpay (authoritative — the browser
- * is never trusted), checks it belongs to the signed-in user, and grants Pro if
- * the mandate is authorized/active. The webhook still handles later renewals and
- * cancellations; this only removes the "webhook can't reach localhost" gap so a
- * paid user gets access immediately.
+ * Confirm a just-completed checkout without waiting on the webhook.
+ *
+ * Security model (every step is server-side and fails closed):
+ *   1. Authenticate the caller.
+ *   2. Fetch the subscription directly from Razorpay (never trust the browser).
+ *   3. Require it to be tagged to THIS user's immutable id — fail closed if the
+ *      tag is missing. This blocks activating off a foreign or shared payment.
+ *   4. Grant only while the subscription is CURRENTLY active/authenticated, so a
+ *      refunded/cancelled/expired subscription's old payload can't restore Pro.
+ *   5. Persist the provider id + current period end, so entitlement can later be
+ *      revoked by expiry/reconciliation. The write is an idempotent upsert.
+ *
+ * A checkout signature, if present, is verified as *supplementary* proof only —
+ * it is never the sole reason for granting Pro.
  */
 async function handleBillingConfirm(request) {
   const user = await supabaseAuth.getUser(bearerToken(request))
@@ -360,37 +368,49 @@ async function handleBillingConfirm(request) {
   const subscriptionId = String(body.subscriptionId ?? '').trim()
   if (!subscriptionId) throw new HttpError('A subscription id is required.', 400)
 
-  // Fast path: if Checkout handed back a signed success payload, verify it. A
-  // valid signature is proof the payment is genuine, so Pro is granted instantly
-  // without waiting on Razorpay's subscription status to propagate.
+  // (2) Authoritative lookup, server-to-server.
+  const subscription = await razorpay.getSubscription(subscriptionId)
+
+  // (3) Ownership binding — fail closed when the tag is absent or mismatched.
+  if (!subscription?.notes?.userId || subscription.notes.userId !== user.id) {
+    throw new HttpError('That subscription is not linked to your account.', 403)
+  }
+
+  // Supplementary (optional) proof — never sufficient on its own.
   const paymentId = String(body.paymentId ?? '').trim()
   const signature = String(body.signature ?? '').trim()
-  if (paymentId && signature && razorpay.verifySubscriptionPayment({ paymentId, subscriptionId, signature })) {
-    await supabaseAuth.setPlan(user.id, 'pro')
-    return { activated: true, plan: 'pro', via: 'signature' }
+  const signatureVerified = Boolean(
+    paymentId && signature && razorpay.verifySubscriptionPayment({ paymentId, subscriptionId, signature }),
+  )
+
+  // (4) Grant only if currently entitled.
+  if (!razorpay.isActiveStatus(subscription.status)) {
+    return { activated: false, plan: user.plan, status: subscription.status ?? 'unknown' }
   }
 
-  // Fallback: independently ask Razorpay for the subscription's current state.
-  const subscription = await razorpay.getSubscription(subscriptionId)
-  // A user may only confirm their OWN subscription — the id in Razorpay's notes
-  // must match the caller, so nobody can activate off someone else's payment.
-  if (subscription?.notes?.userId && subscription.notes.userId !== user.id) {
-    throw new HttpError('That subscription belongs to a different account.', 403)
-  }
-
-  if (razorpay.isActiveStatus(subscription?.status)) {
-    await supabaseAuth.setPlan(user.id, 'pro')
-    return { activated: true, plan: 'pro', via: 'status', status: subscription.status }
-  }
-  return { activated: false, plan: user.plan, status: subscription?.status ?? 'unknown' }
+  // (5) Idempotent write of the authoritative entitlement.
+  await supabaseAuth.upsertSubscription(user.id, {
+    plan: 'pro',
+    status: 'active',
+    provider: 'razorpay',
+    providerSubscriptionId: subscriptionId,
+    currentPeriodEnd: subscription.current_end ? new Date(subscription.current_end * 1000).toISOString() : null,
+    eventAt: new Date().toISOString(),
+  })
+  return { activated: true, plan: 'pro', signatureVerified }
 }
 
 /**
- * Razorpay webhook. The signature is verified over the RAW body (a re-serialized
- * JSON would not match), then the mapped plan change is written. Always answers
- * 200 on a verified event so Razorpay does not needlessly retry.
+ * Razorpay webhook — the ongoing source of lifecycle truth (renewals, cancels,
+ * expiries, refunds, disputes). Hardened against forgery, replay and reordering:
+ *   - HMAC-SHA256 over the RAW body, constant-time compared (verifyWebhook).
+ *   - Event-id idempotency: a duplicate delivery is recorded once and skipped.
+ *   - Ordering guard: an event is applied only if newer than the last one applied
+ *     to that row, so a replayed/out-of-order activation can't overwrite a newer
+ *     cancellation.
+ * Always answers 200 on a verified event so Razorpay does not needlessly retry.
  */
-async function handleBillingWebhook(rawBody, signature) {
+async function handleBillingWebhook(rawBody, signature, eventId) {
   if (!razorpay.verifyWebhook(rawBody, signature)) {
     throw new HttpError('Invalid webhook signature.', 400)
   }
@@ -400,11 +420,65 @@ async function handleBillingWebhook(rawBody, signature) {
   } catch {
     throw new HttpError('Webhook body was not valid JSON.', 400)
   }
-  const change = razorpay.planChangeFor(event)
-  if (change) {
-    await supabaseAuth.setPlan(change.userId, change.plan)
+
+  const decision = razorpay.parseWebhookEvent(event)
+
+  // Idempotency: record the provider event id; a duplicate is a no-op.
+  const fresh = await supabaseAuth.recordBillingEvent(eventId ?? null, event.event, decision?.eventAt ?? null)
+  if (!fresh) return { received: true, duplicate: true }
+
+  if (!decision) return { received: true, ignored: true }
+
+  // Resolve the account: prefer the provider's own note, else our local mapping.
+  const userId = decision.userIdHint
+    || (decision.subscriptionId ? await supabaseAuth.findUserByProviderSubscriptionId(decision.subscriptionId) : null)
+  if (!userId) return { received: true, unresolved: true }
+
+  const fields = { plan: decision.plan, status: decision.status }
+  if (decision.subscriptionId) fields.provider_subscription_id = decision.subscriptionId
+  if (decision.currentPeriodEnd !== undefined) fields.current_period_end = decision.currentPeriodEnd
+
+  const result = await supabaseAuth.patchSubscriptionIfNewer(userId, fields, decision.eventAt)
+  return { received: true, applied: result.applied }
+}
+
+/**
+ * Reconcile the local Pro rows against Razorpay's authoritative state, so a
+ * missed webhook can't leave a stale Pro entitlement. Idempotent — running it
+ * repeatedly converges to the same state. Comp rows (admin grants, no provider
+ * subscription id) are left untouched.
+ */
+async function reconcilePro() {
+  const rows = await supabaseAuth.listProSubscriptions()
+  let checked = 0
+  let revoked = 0
+  let refreshed = 0
+  for (const row of rows) {
+    checked += 1
+    if (!row.provider_subscription_id) continue // admin comp — no provider expiry
+    let entitled = false
+    let currentPeriodEnd = null
+    try {
+      const sub = await razorpay.getSubscription(row.provider_subscription_id)
+      currentPeriodEnd = sub.current_end ? new Date(sub.current_end * 1000).toISOString() : null
+      entitled = razorpay.isActiveStatus(sub.status)
+        && (!sub.current_end || sub.current_end * 1000 > Date.now())
+    } catch { /* provider unreachable / unknown sub → treat as not entitled */ }
+    if (entitled) {
+      await supabaseAuth.upsertSubscription(row.user_id, { status: 'active', currentPeriodEnd })
+      refreshed += 1
+    } else {
+      await supabaseAuth.upsertSubscription(row.user_id, { plan: 'free', status: 'inactive' })
+      revoked += 1
+    }
   }
-  return { received: true }
+  return { checked, refreshed, revoked }
+}
+
+/** Admin-triggered reconciliation. */
+async function handleAdminReconcile(request) {
+  await requireAdmin(request)
+  return reconcilePro()
 }
 
 
@@ -633,6 +707,19 @@ const routes = [
     },
   },
   {
+    // Scheduled reconciliation (Vercel Cron). Guarded by a shared secret so it
+    // can't be triggered anonymously; disabled entirely if CRON_SECRET is unset.
+    pattern: /^\/api\/cron\/reconcile$/,
+    cacheControl: 'no-store',
+    handle: async (_match, _url, request) => {
+      const secret = process.env.CRON_SECRET
+      const auth = request.headers.authorization ?? ''
+      const provided = auth.startsWith('Bearer ') ? auth.slice(7) : request.headers['x-cron-secret']
+      if (!secret || provided !== secret) throw new HttpError('Not found.', 404)
+      return reconcilePro()
+    },
+  },
+  {
     // Admin: the editable settings plus diagnostics for the console.
     pattern: /^\/api\/admin\/settings$/,
     cacheControl: 'no-store',
@@ -840,6 +927,7 @@ const routes = [
 const POST_ROUTES = {
   '/api/admin/users/plan': handleAdminSetPlan,
   '/api/admin/settings': handleAdminSaveSettings,
+  '/api/admin/reconcile': handleAdminReconcile,
   '/api/billing/subscribe': handleSubscribe,
   '/api/billing/confirm': handleBillingConfirm,
   '/api/profile': handleUpdateProfile,
@@ -867,7 +955,8 @@ export async function handleRequest(request, response) {
     try {
       const rawBody = await readRawBody(request)
       const signature = request.headers['x-razorpay-signature']
-      return json(response, 200, await handleBillingWebhook(rawBody, signature), { origin })
+      const eventId = request.headers['x-razorpay-event-id']
+      return json(response, 200, await handleBillingWebhook(rawBody, signature, eventId), { origin })
     } catch (error) {
       const status = error instanceof HttpError ? error.status : 500
       const message = error instanceof HttpError ? error.message : 'Webhook handling failed.'

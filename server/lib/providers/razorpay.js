@@ -22,9 +22,15 @@ const API_BASE = 'https://api.razorpay.com/v1'
 
 // Which subscription states mean the user should have Pro, and which revoke it.
 const ACTIVATING_EVENTS = new Set(['subscription.activated', 'subscription.charged', 'subscription.resumed'])
-const REVOKING_EVENTS = new Set([
+// Subscription-scoped revocations (the entity is a subscription).
+const SUBSCRIPTION_REVOKING_EVENTS = new Set([
   'subscription.cancelled', 'subscription.halted', 'subscription.completed',
   'subscription.expired', 'subscription.paused',
+])
+// Payment-scoped revocations (the entity is a payment): money taken back.
+const PAYMENT_REVOKING_EVENTS = new Set([
+  'refund.created', 'refund.processed',
+  'payment.dispute.created', 'payment.dispute.lost',
 ])
 
 // Subscription *statuses* (from the Subscriptions API) that mean the mandate is
@@ -141,16 +147,50 @@ export class RazorpayClient {
   }
 
   /**
-   * Interpret a verified webhook payload into an entitlement decision:
-   * { userId, plan } to apply, or null if the event is not one we act on.
+   * Interpret a verified webhook payload into a normalized entitlement decision,
+   * or null if the event is not one we act on. The caller resolves the final user
+   * (preferring `userIdHint` from the provider notes, else a local lookup by
+   * `subscriptionId`) and applies it with idempotency + ordering guards.
+   *
+   *   { type, eventAt, subscriptionId, userIdHint, plan, status, currentPeriodEnd }
+   *
+   * `eventAt` is the provider's own event time (for ordering); `currentPeriodEnd`
+   * is undefined when the event doesn't carry one (so it isn't overwritten).
    */
-  planChangeFor(event) {
+  parseWebhookEvent(event) {
     const type = event?.event
-    const subscription = event?.payload?.subscription?.entity
-    const userId = subscription?.notes?.userId
-    if (!type || !userId) return null
-    if (ACTIVATING_EVENTS.has(type)) return { userId, plan: 'pro' }
-    if (REVOKING_EVENTS.has(type)) return { userId, plan: 'free' }
+    if (!type) return null
+    const eventAt = new Date((Number(event.created_at) || 0) * 1000).toISOString()
+    const subEntity = event?.payload?.subscription?.entity
+    const payEntity = event?.payload?.payment?.entity
+
+    if (ACTIVATING_EVENTS.has(type) || SUBSCRIPTION_REVOKING_EVENTS.has(type)) {
+      if (!subEntity) return null
+      const activating = ACTIVATING_EVENTS.has(type)
+      return {
+        type,
+        eventAt,
+        subscriptionId: subEntity.id ?? null,
+        userIdHint: subEntity.notes?.userId ?? null,
+        plan: activating ? 'pro' : 'free',
+        status: activating ? 'active' : (type.split('.')[1] ?? 'inactive'),
+        currentPeriodEnd: subEntity.current_end ? new Date(subEntity.current_end * 1000).toISOString() : undefined,
+      }
+    }
+
+    if (PAYMENT_REVOKING_EVENTS.has(type)) {
+      // Money was returned/disputed — revoke regardless of subscription status.
+      return {
+        type,
+        eventAt,
+        subscriptionId: payEntity?.subscription_id ?? subEntity?.id ?? null,
+        userIdHint: payEntity?.notes?.userId ?? subEntity?.notes?.userId ?? null,
+        plan: 'free',
+        status: 'revoked',
+        currentPeriodEnd: undefined,
+      }
+    }
+
     return null
   }
 }

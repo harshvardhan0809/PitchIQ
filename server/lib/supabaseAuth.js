@@ -62,7 +62,15 @@ export class SupabaseAuth {
     }
   }
 
-  /** Validate a token and resolve the user with their *current* plan, or null. */
+  /**
+   * Validate a token and resolve the user with their *effective* plan, or null.
+   *
+   * Effective Pro requires all of: a subscriptions row owned by this user, plan
+   * 'pro', status 'active', and (if known) an entitlement period that has not
+   * expired. This is the single authoritative entitlement check — computed fresh
+   * on every request from server-owned data, never from the token or client. The
+   * legacy app_metadata plan is used ONLY when no row exists (pre-migration).
+   */
   async getUser(token) {
     if (!this.configured || !token) return null
     const identity = await this.cache.resolve(
@@ -71,8 +79,43 @@ export class SupabaseAuth {
       () => this.validateToken(token),
     )
     if (!identity?.id) return null
-    const tablePlan = await this.getSubscriptionPlan(identity.id)
-    return { id: identity.id, email: identity.email, plan: tablePlan ?? identity.metaPlan }
+    const row = await this.getSubscriptionRow(identity.id)
+    const plan = row ? (this.isRowEntitled(row) ? 'pro' : 'free') : identity.metaPlan
+    return { id: identity.id, email: identity.email, plan }
+  }
+
+  /** The authoritative Pro test for a subscriptions row: pro + active + unexpired. */
+  isRowEntitled(row) {
+    if (!row || normalizePlan(row.plan) !== 'pro') return false
+    if (row.status && row.status !== 'active') return false
+    if (row.current_period_end) {
+      const end = new Date(row.current_period_end).getTime()
+      if (Number.isFinite(end) && end <= Date.now()) return false // entitlement lapsed
+    }
+    return true
+  }
+
+  /**
+   * The full subscriptions row for a user (entitlement fields), or null. Degrades
+   * gracefully if the `last_event_at` column hasn't been migrated yet, so the
+   * entitlement read never breaks purely because the migration hasn't run.
+   */
+  async getSubscriptionRow(userId) {
+    if (!this.canManage) return null
+    const select = (cols) => fetch(
+      `${this.restUrl}/subscriptions?user_id=eq.${userId}&select=${cols}`,
+      { headers: this.restHeaders() },
+    )
+    let response
+    try {
+      response = await select('plan,status,current_period_end,provider_subscription_id,last_event_at')
+      if (response.status === 400) response = await select('plan,status,current_period_end,provider_subscription_id')
+    } catch {
+      return null
+    }
+    if (!response.ok) return null
+    const rows = await response.json().catch(() => null)
+    return rows?.[0] ?? null
   }
 
   /** Drop a cached token validation (identity only; the plan is never cached). */
@@ -114,11 +157,23 @@ export class SupabaseAuth {
     return new Map(rows.map((row) => [row.user_id, normalizePlan(row.plan)]))
   }
 
-  async upsertSubscription(userId, { plan, status }) {
+  /**
+   * Upsert a subscriptions row. Only the fields provided are written (Postgres
+   * ON CONFLICT DO UPDATE touches just those columns), so callers can update a
+   * single field without clobbering the rest.
+   */
+  async upsertSubscription(userId, { plan, status, provider, providerSubscriptionId, currentPeriodEnd, eventAt } = {}) {
+    const body = { user_id: userId, updated_at: new Date().toISOString() }
+    if (plan !== undefined) body.plan = plan
+    if (status !== undefined) body.status = status
+    if (provider !== undefined) body.provider = provider
+    if (providerSubscriptionId !== undefined) body.provider_subscription_id = providerSubscriptionId
+    if (currentPeriodEnd !== undefined) body.current_period_end = currentPeriodEnd
+    if (eventAt !== undefined) body.last_event_at = eventAt
     const response = await fetch(`${this.restUrl}/subscriptions`, {
       method: 'POST',
       headers: this.restHeaders({ 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' }),
-      body: JSON.stringify({ user_id: userId, plan, status, updated_at: new Date().toISOString() }),
+      body: JSON.stringify(body),
     })
     if (!response.ok) {
       const detail = await response.text().catch(() => '')
@@ -138,7 +193,10 @@ export class SupabaseAuth {
     const status = plan === 'free' ? 'inactive' : 'active'
     let wroteTable = false
     try {
-      await this.upsertSubscription(userId, { plan, status })
+      // A manual/admin change is a comp with no provider expiry, so clear
+      // current_period_end (else a stale past expiry would keep it non-entitled).
+      // eventAt=now so a genuinely older provider event can't overwrite this.
+      await this.upsertSubscription(userId, { plan, status, currentPeriodEnd: null, eventAt: new Date().toISOString() })
       wroteTable = true
     } catch {
       // Table may not exist yet — fall back to app_metadata only.
@@ -164,6 +222,94 @@ export class SupabaseAuth {
       throw new HttpError('Could not reach the authentication service.', 502)
     }
     if (!response.ok) throw new HttpError('Could not update the plan.', 502)
+  }
+
+  // --- webhook idempotency, ordering & reconciliation ------------------------
+
+  /**
+   * Record a provider event id. Returns true if this is the first time we've seen
+   * it, false if it's a duplicate (primary-key conflict). If the ledger table is
+   * missing we fail OPEN (return true) — writes downstream are still idempotent
+   * and ordering-guarded, so a missing ledger degrades dedup, not correctness.
+   */
+  async recordBillingEvent(eventId, type, createdAtIso) {
+    if (!this.canManage || !eventId) return true
+    let response
+    try {
+      response = await fetch(`${this.restUrl}/billing_events`, {
+        method: 'POST',
+        headers: this.restHeaders({ 'Content-Type': 'application/json', Prefer: 'return=minimal' }),
+        body: JSON.stringify({ event_id: eventId, event_type: type ?? null, event_created_at: createdAtIso ?? null }),
+      })
+    } catch {
+      return true
+    }
+    if (response.status === 409) return false // already processed
+    return true
+  }
+
+  /**
+   * Apply an entitlement change ONLY if it is newer than the last event applied
+   * to that row. The `last_event_at` filter makes ordering atomic in the DB, so a
+   * replayed or out-of-order older event cannot overwrite a newer state. Returns
+   * whether a row was actually updated.
+   */
+  async patchSubscriptionIfNewer(userId, fields, eventAtIso) {
+    if (!this.canManage) return { applied: false }
+    const guard = `or=(last_event_at.is.null,last_event_at.lt.${encodeURIComponent(eventAtIso)})`
+    const body = { ...fields, last_event_at: eventAtIso, updated_at: new Date().toISOString() }
+    let response
+    try {
+      response = await fetch(`${this.restUrl}/subscriptions?user_id=eq.${userId}&${guard}`, {
+        method: 'PATCH',
+        headers: this.restHeaders({ 'Content-Type': 'application/json', Prefer: 'return=representation' }),
+        body: JSON.stringify(body),
+      })
+    } catch {
+      return { applied: false }
+    }
+    if (response.status === 400) {
+      // Pre-migration (no last_event_at column): apply unordered so the webhook
+      // still functions. The ordering guard activates once the migration runs.
+      await this.upsertSubscription(userId, fields)
+      return { applied: true, ordered: false }
+    }
+    if (!response.ok) return { applied: false }
+    const rows = await response.json().catch(() => [])
+    return { applied: Array.isArray(rows) && rows.length > 0 }
+  }
+
+  /** Every row currently marked pro, for reconciliation against the provider. */
+  async listProSubscriptions() {
+    if (!this.canManage) return []
+    let response
+    try {
+      response = await fetch(
+        `${this.restUrl}/subscriptions?plan=eq.pro&select=user_id,status,current_period_end,provider_subscription_id`,
+        { headers: this.restHeaders() },
+      )
+    } catch {
+      return []
+    }
+    if (!response.ok) return []
+    return (await response.json().catch(() => [])) ?? []
+  }
+
+  /** Resolve the owning user for a provider subscription id (webhook fallback). */
+  async findUserByProviderSubscriptionId(subscriptionId) {
+    if (!this.canManage || !subscriptionId) return null
+    let response
+    try {
+      response = await fetch(
+        `${this.restUrl}/subscriptions?provider_subscription_id=eq.${encodeURIComponent(subscriptionId)}&select=user_id`,
+        { headers: this.restHeaders() },
+      )
+    } catch {
+      return null
+    }
+    if (!response.ok) return null
+    const rows = await response.json().catch(() => null)
+    return rows?.[0]?.user_id ?? null
   }
 
   // --- profiles --------------------------------------------------------------
