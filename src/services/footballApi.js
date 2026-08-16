@@ -1,4 +1,4 @@
-import { demoDashboards, demoSearchResults, demoSpotlight } from '../data/demoData'
+import { demoDashboards, demoSearchResults, demoSpotlight, demoMatchXg } from '../data/demoData'
 import { demoPlayerDashboard } from '../data/demoPlayer'
 
 const dataMode = import.meta.env.VITE_DATA_MODE ?? 'demo'
@@ -64,6 +64,12 @@ const DEMO_TEAMS = [
 export async function fetchTeams() {
   if (!usesLiveData) return delay({ teams: DEMO_TEAMS })
   return request('/api/teams')
+}
+
+/** Match xG & clean-sheet projections for the focus gameweek (free, public). */
+export async function fetchMatchXg(league = 'PL') {
+  if (!usesLiveData) return delay(demoMatchXg())
+  return request(`/api/intel/match-xg?league=${encodeURIComponent(league)}`)
 }
 
 export async function searchPlayers(query = '', league = 'PL') {

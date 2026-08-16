@@ -58,8 +58,8 @@ function YouCard({ you }) {
     return (
       <div className="wr-you wr-you-empty">
         <p>
-          Set your FPL team ID in <Link to="/pricing" className="wr-inline-link">My Team</Link> to highlight your row and
-          see your exact gap to overtake.
+          Set your FPL Team ID in <Link to="/account" className="wr-inline-link">your profile</Link> to highlight your row
+          and see your exact gap to overtake.
         </p>
       </div>
     )

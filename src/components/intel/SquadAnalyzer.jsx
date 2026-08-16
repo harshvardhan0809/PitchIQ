@@ -1,32 +1,20 @@
-import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { useAsync } from '../../hooks/useAsync'
 import { PLAN_LABELS } from '../../lib/plan'
 import { useAuth } from '../../lib/auth'
 import { fetchSquad } from '../../services/intelligenceApi'
-import { getProfile, saveProfile } from '../../services/profileApi'
+import { getProfile } from '../../services/profileApi'
+import { usesLiveData } from '../../services/footballApi'
 import { PlayerLink } from '../PlayerLink'
 import '../../styles/intel.css'
 
 /**
- * "My Team": connect an FPL team by ID and see it run through the projection
+ * "My Team": runs the FPL team saved on the user's profile through the projection
  * engine — projected score, captain advice, weak links (all free) and the
- * transfer fixes (Pro). The team ID is saved to the user's profile (so it
- * follows them across devices), with localStorage as an offline fallback.
+ * transfer fixes (Pro). The team ID is managed in the account/profile page (one
+ * place, synced across devices); there's no inline entry here.
  */
-const STORAGE_KEY = 'pitchiq-team-id'
-
-function readStored() {
-  try { return window.localStorage.getItem(STORAGE_KEY) || '' } catch { return '' }
-}
-function writeStored(id) {
-  try {
-    if (id) window.localStorage.setItem(STORAGE_KEY, id)
-    else window.localStorage.removeItem(STORAGE_KEY)
-  } catch { /* storage unavailable */ }
-}
-
 function Fixture({ next }) {
   if (!next) return <span className="sq-fx sq-fx-none">—</span>
   return (
@@ -173,29 +161,19 @@ function Transfers({ data }) {
   )
 }
 
-function ConnectForm({ value, onChange, onSubmit, connected, onDisconnect }) {
+function ConnectPrompt() {
   return (
-    <form className="sq-connect" onSubmit={onSubmit}>
-      <label htmlFor="fpl-team-id" className="sq-connect-label">FPL team ID</label>
-      <div className="sq-connect-row">
-        <input
-          id="fpl-team-id"
-          className="sq-connect-input"
-          inputMode="numeric"
-          pattern="[0-9]*"
-          placeholder="e.g. 1234567"
-          value={value}
-          onChange={(event) => onChange(event.target.value.replace(/[^0-9]/g, ''))}
-        />
-        <button type="submit" className="sq-connect-btn">{connected ? 'Reload' : 'Analyse my team'}</button>
-        {connected && (
-          <button type="button" className="sq-connect-clear" onClick={onDisconnect}>Change</button>
-        )}
-      </div>
-      <p className="sq-connect-hint">
-        Find it in your FPL team URL: <code>fantasy.premierleague.com/entry/<b>1234567</b>/event/…</code>
+    <div className="sq-connect-prompt">
+      <span className="sq-connect-mark" aria-hidden="true">🧩</span>
+      <h3>Connect your FPL team</h3>
+      <p>
+        Add your FPL Team ID in your profile once and it powers My Team and the War Room across every device.
       </p>
-    </form>
+      <Link to="/account" className="upgrade-cta">Set it in your profile →</Link>
+      <p className="sq-connect-hint">
+        You&apos;ll find the ID in your FPL team URL: <code>fantasy.premierleague.com/entry/<b>1234567</b>/event/…</code>
+      </p>
+    </div>
   )
 }
 
@@ -210,44 +188,19 @@ function Skeleton() {
 
 export function SquadAnalyzer({ league = 'PL' }) {
   const { plan, signedIn } = useAuth()
-  const [teamId, setTeamId] = useState(readStored)
-  const [submitted, setSubmitted] = useState(readStored)
 
-  // Adopt the team id saved to the profile (it wins over a local-only value, so
-  // the same team shows up on any device the user signs in from).
-  useEffect(() => {
-    if (!signedIn) return undefined
-    let active = true
-    getProfile()
-      .then((profile) => {
-        const saved = profile?.fplTeamId ? String(profile.fplTeamId) : ''
-        if (active && saved) { setTeamId(saved); setSubmitted(saved); writeStored(saved) }
-      })
-      .catch(() => { /* fall back to the local value */ })
-    return () => { active = false }
-  }, [signedIn])
+  // The team ID lives on the profile now — read it, don't enter it here. In demo
+  // mode (no live profile) a sample team stands in so the view is explorable.
+  const profileQuery = useAsync(getProfile, [], { enabled: signedIn })
+  const profileTeamId = profileQuery.data?.fplTeamId ? String(profileQuery.data.fplTeamId) : ''
+  const teamId = usesLiveData ? profileTeamId : (profileTeamId || 'demo')
 
-  const { status, data, error, reload } = useAsync(fetchSquad, [submitted, league], {
-    enabled: Boolean(submitted),
+  const { status, data, error, reload } = useAsync(fetchSquad, [teamId, league], {
+    enabled: Boolean(teamId),
     refreshKey: plan,
   })
 
-  function handleSubmit(event) {
-    event.preventDefault()
-    const id = teamId.trim()
-    if (!id) return
-    writeStored(id)
-    saveProfile({ fplTeamId: id }).catch(() => { /* local copy still works */ })
-    if (id === submitted) reload()
-    else setSubmitted(id)
-  }
-
-  function handleDisconnect() {
-    writeStored('')
-    saveProfile({ fplTeamId: '' }).catch(() => {})
-    setTeamId('')
-    setSubmitted('')
-  }
+  const resolvingProfile = usesLiveData && signedIn && profileQuery.status === 'loading'
 
   return (
     <div className="intel sq">
@@ -256,34 +209,33 @@ export function SquadAnalyzer({ league = 'PL' }) {
           <p className="intel-eyebrow">My Team</p>
           <h1 className="intel-title">Your squad, projected</h1>
           <p className="intel-sub">
-            Connect your FPL team once and get a weekly read: projected score, the right captain, your weak links,
+            A weekly read on the team saved to your profile: projected score, the right captain, your weak links,
             and the transfers that fix them.
           </p>
         </div>
+        {teamId && (
+          <div className="sq-connected">
+            <span className="sq-connected-id">Team #{teamId}</span>
+            <Link to="/account" className="sq-connected-link">Manage in profile</Link>
+            <button type="button" className="sq-connected-reload" onClick={reload}>Reload</button>
+          </div>
+        )}
       </header>
 
-      <ConnectForm
-        value={teamId}
-        onChange={setTeamId}
-        onSubmit={handleSubmit}
-        connected={Boolean(submitted)}
-        onDisconnect={handleDisconnect}
-      />
+      {resolvingProfile && <Skeleton />}
 
-      {!submitted && (
-        <p className="sq-idle">Enter your team ID above to analyse your squad.</p>
-      )}
+      {!resolvingProfile && !teamId && <ConnectPrompt />}
 
-      {submitted && status === 'loading' && <Skeleton />}
+      {teamId && status === 'loading' && <Skeleton />}
 
-      {submitted && status === 'error' && (
+      {teamId && status === 'error' && (
         <div className="intel-error">
           <p>{error?.message ?? 'Could not analyse that team.'}</p>
           <button type="button" onClick={reload}>Try again</button>
         </div>
       )}
 
-      {submitted && status === 'ready' && data && (
+      {teamId && status === 'ready' && data && (
         <>
           <section className="sq-summary">
             <div className="sq-entry">

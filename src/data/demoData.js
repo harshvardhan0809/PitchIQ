@@ -320,6 +320,30 @@ export function demoFormPicks() {
   }
 }
 
+// --- Match xG & clean sheets (demo) ----------------------------------------
+function xgSide(name, shortName, xg, cs) {
+  return { id: shortName, name, shortName, crest: CREST, xg, cleanSheetPct: cs, score: null }
+}
+function xgMatch(id, home, away, totalXg, btts) {
+  return { id, kickoff: null, started: false, finished: false, home, away, totalXg, bttsPct: btts }
+}
+
+export function demoMatchXg() {
+  return {
+    gameweek: 12,
+    gameweekName: 'Matchday 12',
+    dataDepth: 'in-season',
+    generatedAt: new Date().toISOString(),
+    matches: [
+      xgMatch('d1', xgSide('Manchester City', 'MCI', 2.4, 58), xgSide('Chelsea', 'CHE', 1.1, 22), 3.5, 52),
+      xgMatch('d2', xgSide('Liverpool', 'LIV', 2.1, 55), xgSide('Arsenal', 'ARS', 1.3, 26), 3.4, 57),
+      xgMatch('d3', xgSide('Aston Villa', 'AVL', 1.6, 33), xgSide('Newcastle United', 'NEW', 1.4, 30), 3.0, 61),
+      xgMatch('d4', xgSide('Brighton', 'BHA', 1.5, 31), xgSide('Everton', 'EVE', 0.9, 18), 2.4, 45),
+      xgMatch('d5', xgSide('Tottenham Hotspur', 'TOT', 1.9, 40), xgSide('West Ham United', 'WHU', 1.2, 22), 3.1, 55),
+    ],
+  }
+}
+
 export function demoSpotlight(league = 'PL') {
   const option = { PL: 'Premier League', PD: 'La Liga', SA: 'Serie A', BL1: 'Bundesliga', FL1: 'Ligue 1' }
   return {

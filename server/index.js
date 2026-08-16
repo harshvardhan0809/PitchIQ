@@ -23,6 +23,7 @@ import { getSquadAnalysis } from './lib/intelligence/squad.js'
 import { getPriceWatch } from './lib/intelligence/priceWatch.js'
 import { getLeagueWarRoom } from './lib/intelligence/league.js'
 import { getManagerAnalysis } from './lib/intelligence/manager.js'
+import { getMatchOdds } from './lib/intelligence/matchOdds.js'
 import { parseLeagueId } from './lib/providers/fpl.js'
 import { parseEntryId } from './lib/providers/fpl.js'
 import { RazorpayClient } from './lib/providers/razorpay.js'
@@ -57,7 +58,7 @@ loadEnvFile()
 
 // Identifies the running code so a stale `node server/index.js` is detectable
 // at /api/health and in the startup log. Bump on behaviour changes.
-const SERVER_BUILD = '2026-08-15-entitlement-hardening'
+const SERVER_BUILD = '2026-08-16-match-xg'
 
 const port = Number(process.env.PORT ?? process.env.API_PORT ?? 3001)
 const host = process.env.API_HOST ?? '0.0.0.0'
@@ -752,6 +753,19 @@ const routes = [
         .map((team) => ({ id: team.id, name: team.name, shortName: team.short_name }))
         .sort((a, b) => a.name.localeCompare(b.name))
       return { teams }
+    },
+  },
+  {
+    // Match xG & clean-sheet projections for the focus gameweek. Free & public
+    // (match-level, not personalised), so it's cacheable like the matchday feed.
+    pattern: /^\/api\/intel\/match-xg$/,
+    cacheControl: 'public, max-age=300',
+    handle: async (_match, url) => {
+      const competition = getCompetition(url.searchParams.get('league') ?? defaultCompetition)
+      if (!competition.supportsFpl) {
+        throw new HttpError('Match xG is available for the Premier League only.', 400)
+      }
+      return getMatchOdds({ fpl })
     },
   },
   {
