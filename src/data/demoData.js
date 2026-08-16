@@ -321,11 +321,12 @@ export function demoFormPicks() {
 }
 
 // --- Match xG & clean sheets (demo) ----------------------------------------
-function xgSide(name, shortName, xg, cs) {
-  return { id: shortName, name, shortName, crest: CREST, xg, cleanSheetPct: cs, score: null }
+function xgSide(name, shortName, xg, cs, score = null) {
+  return { id: shortName, name, shortName, crest: CREST, xg, cleanSheetPct: cs, score }
 }
-function xgMatch(id, home, away, totalXg, btts) {
-  return { id, kickoff: null, started: false, finished: false, home, away, totalXg, bttsPct: btts }
+function xgMatch(id, home, away, totalXg, btts, state = {}) {
+  const { started = false, finished = false } = state
+  return { id, kickoff: null, started, finished, home, away, totalXg, bttsPct: btts }
 }
 
 export function demoMatchXg() {
@@ -335,11 +336,56 @@ export function demoMatchXg() {
     dataDepth: 'in-season',
     generatedAt: new Date().toISOString(),
     matches: [
-      xgMatch('d1', xgSide('Manchester City', 'MCI', 2.4, 58), xgSide('Chelsea', 'CHE', 1.1, 22), 3.5, 52),
-      xgMatch('d2', xgSide('Liverpool', 'LIV', 2.1, 55), xgSide('Arsenal', 'ARS', 1.3, 26), 3.4, 57),
+      // A finished match (real score in) and a live one, to show the model-vs-actual read.
+      xgMatch('d1', xgSide('Manchester City', 'MCI', 2.4, 58, 3), xgSide('Chelsea', 'CHE', 1.1, 22, 1), 3.5, 52, { started: true, finished: true }),
+      xgMatch('d2', xgSide('Liverpool', 'LIV', 2.1, 55, 1), xgSide('Arsenal', 'ARS', 1.3, 26, 1), 3.4, 57, { started: true }),
       xgMatch('d3', xgSide('Aston Villa', 'AVL', 1.6, 33), xgSide('Newcastle United', 'NEW', 1.4, 30), 3.0, 61),
       xgMatch('d4', xgSide('Brighton', 'BHA', 1.5, 31), xgSide('Everton', 'EVE', 0.9, 18), 2.4, 45),
       xgMatch('d5', xgSide('Tottenham Hotspur', 'TOT', 1.9, 40), xgSide('West Ham United', 'WHU', 1.2, 22), 3.1, 55),
+    ],
+  }
+}
+
+// --- Expert View (demo) -----------------------------------------------------
+export function demoExpert() {
+  const hoursAgo = (h) => new Date(Date.now() - h * 3600 * 1000).toISOString()
+  return {
+    enabled: true,
+    generatedAt: new Date().toISOString(),
+    sources: ['Fantasy Football Scout', 'r/FantasyPL'],
+    articles: [
+      {
+        id: 'demo-1',
+        title: 'Scout Picks: the captain call for the double gameweek',
+        url: 'https://www.fantasyfootballscout.co.uk/',
+        source: 'Fantasy Football Scout',
+        publishedAt: hoursAgo(3),
+        excerpt: 'Two premium options stand out for the armband this week, with a differential shout for the brave. Here is how the fixtures and underlying numbers stack up.',
+      },
+      {
+        id: 'demo-2',
+        title: 'Wildcard drafts: who is nailing the mid-price midfield?',
+        url: 'https://www.reddit.com/r/FantasyPL/',
+        source: 'r/FantasyPL',
+        publishedAt: hoursAgo(9),
+        excerpt: 'The community shares the £6.5m enablers letting them load up on premiums up front. A thread full of drafts and the reasoning behind each pick.',
+      },
+      {
+        id: 'demo-3',
+        title: 'Set-and-forget defenders for the run of green fixtures',
+        url: 'https://www.fantasyfootballscout.co.uk/',
+        source: 'Fantasy Football Scout',
+        publishedAt: hoursAgo(26),
+        excerpt: 'A look at the backlines with the kindest schedule over the next five, and which full-backs offer the attacking returns to justify a long-term hold.',
+      },
+      {
+        id: 'demo-4',
+        title: 'Price rise watch: three players on the brink tonight',
+        url: 'https://www.reddit.com/r/FantasyPL/',
+        source: 'r/FantasyPL',
+        publishedAt: hoursAgo(31),
+        excerpt: 'Transfer momentum is surging on a handful of forwards. If you were planning the move, the community consensus is not to wait past the deadline.',
+      },
     ],
   }
 }

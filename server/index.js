@@ -24,6 +24,7 @@ import { getPriceWatch } from './lib/intelligence/priceWatch.js'
 import { getLeagueWarRoom } from './lib/intelligence/league.js'
 import { getManagerAnalysis } from './lib/intelligence/manager.js'
 import { getMatchOdds } from './lib/intelligence/matchOdds.js'
+import { getExpertFeed } from './lib/expert.js'
 import { parseLeagueId } from './lib/providers/fpl.js'
 import { parseEntryId } from './lib/providers/fpl.js'
 import { RazorpayClient } from './lib/providers/razorpay.js'
@@ -58,7 +59,7 @@ loadEnvFile()
 
 // Identifies the running code so a stale `node server/index.js` is detectable
 // at /api/health and in the startup log. Bump on behaviour changes.
-const SERVER_BUILD = '2026-08-16-match-xg'
+const SERVER_BUILD = '2026-08-16-expert-view'
 
 const port = Number(process.env.PORT ?? process.env.API_PORT ?? 3001)
 const host = process.env.API_HOST ?? '0.0.0.0'
@@ -766,6 +767,17 @@ const routes = [
         throw new HttpError('Match xG is available for the Premier League only.', 400)
       }
       return getMatchOdds({ fpl })
+    },
+  },
+  {
+    // Expert View — a curated feed of real FPL-community writing, merged from the
+    // admin-configured RSS/Atom sources. Free & public; cached a few minutes as
+    // it just aggregates public articles.
+    pattern: /^\/api\/expert$/,
+    cacheControl: 'public, max-age=600',
+    handle: async () => {
+      const { expert } = await loadSettings()
+      return getExpertFeed({ expert, cache })
     },
   },
   {

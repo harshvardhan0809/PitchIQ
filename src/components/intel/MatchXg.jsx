@@ -28,17 +28,38 @@ function Metric({ label, value, suffix, tone }) {
   )
 }
 
+// When a match is done we can grade the model: was the total-goals xG within a
+// goal of what actually landed? A light, honest "how did we do" read.
+function verdictFor(match) {
+  const goals = (match.home.score ?? 0) + (match.away.score ?? 0)
+  const missBy = Math.abs(goals - match.totalXg)
+  const tone = missBy <= 1 ? 'good' : missBy <= 2 ? 'neutral' : 'bad'
+  return { goals, tone }
+}
+
 function MatchCard({ match }) {
-  const { home, away } = match
+  const { home, away, started, finished } = match
   // Share the xG bar proportionally between the two sides.
   const total = Math.max(0.1, home.xg + away.xg)
   const homePct = Math.round((home.xg / total) * 100)
+  const verdict = finished ? verdictFor(match) : null
 
   return (
-    <li className="mxg-card">
+    <li className={`mxg-card ${finished ? 'is-finished' : started ? 'is-live' : ''}`}>
       <div className="mxg-head">
         <Side team={home} align="home" />
-        <span className="mxg-vs">vs</span>
+        <div className="mxg-center">
+          {started ? (
+            <span className="mxg-score">{home.score ?? 0}<i>–</i>{away.score ?? 0}</span>
+          ) : (
+            <span className="mxg-vs">vs</span>
+          )}
+          {started && (
+            <span className={`mxg-status ${finished ? 'ft' : 'live'}`}>
+              {finished ? 'Full time' : 'Live'}
+            </span>
+          )}
+        </div>
         <Side team={away} align="away" />
       </div>
 
@@ -50,7 +71,7 @@ function MatchCard({ match }) {
         </div>
         <span className="mxg-xg-val">{away.xg}</span>
       </div>
-      <p className="mxg-xg-cap">expected goals</p>
+      <p className="mxg-xg-cap">{started ? 'projected expected goals' : 'expected goals'}</p>
 
       <div className="mxg-metrics">
         <Metric label={`${home.shortName} clean sheet`} value={home.cleanSheetPct} suffix="%" tone={csTone(home.cleanSheetPct)} />
@@ -58,7 +79,13 @@ function MatchCard({ match }) {
         <Metric label={`${away.shortName} clean sheet`} value={away.cleanSheetPct} suffix="%" tone={csTone(away.cleanSheetPct)} />
       </div>
 
-      <p className="mxg-btts">Both teams to score <b>{match.bttsPct}%</b></p>
+      {finished ? (
+        <p className={`mxg-verdict tone-${verdict.tone}`}>
+          Projected <b>{match.totalXg}</b> xG · actually <b>{verdict.goals}</b> {verdict.goals === 1 ? 'goal' : 'goals'}
+        </p>
+      ) : (
+        <p className="mxg-btts">Both teams to score <b>{match.bttsPct}%</b></p>
+      )}
     </li>
   )
 }

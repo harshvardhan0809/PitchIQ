@@ -21,6 +21,7 @@ export const DEFAULT_CONFIG = {
   announcement: { enabled: false, text: '', tone: 'info' },
   managerDefaultTeam: 'MUN',
   features: {
+    matchxg: true, expert: true,
     squad: true, captain: true, briefing: true, prices: true, league: true, manager: true, differentials: true,
   },
 }

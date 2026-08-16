@@ -263,3 +263,20 @@
   .admin-panels:has(.admin-preview) { flex-direction: row; align-items: start; }
   .admin-panels:has(.admin-preview) > .admin-card:first-child { flex: 1; }
 }
+
+/* Expert View source editor */
+.admin-sources { display: flex; flex-direction: column; gap: 10px; }
+.admin-source-row { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(180px, 2fr) auto; gap: 8px; align-items: center; }
+.admin-source-row input {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 9px; color: var(--ink);
+  font: inherit; font-size: .86rem; padding: 8px 11px; width: 100%;
+}
+.admin-source-row input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(36,214,127,.12); }
+.admin-source-url.is-invalid { border-color: rgba(240,90,90,.55); }
+.admin-source-del {
+  background: transparent; border: 1px solid var(--border); border-radius: 9px; color: var(--faint);
+  font: inherit; font-size: .8rem; width: 34px; height: 34px; cursor: pointer;
+}
+.admin-source-del:hover { color: var(--bad); border-color: rgba(240,90,90,.4); }
+.admin-source-warn { grid-column: 1 / -1; font-size: .74rem; color: var(--bad); }
+.admin-add-source { align-self: start; }

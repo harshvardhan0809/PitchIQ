@@ -43,6 +43,8 @@ const ManagerMindset = lazy(() => import('../components/intel/ManagerMindset')
   .then((module) => ({ default: module.ManagerMindset })))
 const MatchXg = lazy(() => import('../components/intel/MatchXg')
   .then((module) => ({ default: module.MatchXg })))
+const ExpertView = lazy(() => import('../components/intel/ExpertView')
+  .then((module) => ({ default: module.ExpertView })))
 
 // Ordered top-to-bottom by how central each surface is to a weekly decision:
 // the free matchday home first, then your own team, the flagship captain call,
@@ -51,6 +53,7 @@ const MatchXg = lazy(() => import('../components/intel/MatchXg')
 const VIEWS = [
   { id: 'matchday', label: 'Matchday', icon: '⚽', hint: 'Fixtures & players to watch' },
   { id: 'matchxg', label: 'Match xG', icon: '🥅', hint: 'Expected goals & clean sheets' },
+  { id: 'expert', label: 'Expert View', icon: '📰', hint: 'FPL reads from the community' },
   { id: 'squad', label: 'My Team', premium: true, icon: '🧩', hint: 'Your squad, projected & fixed' },
   { id: 'captain', label: 'Captain AI', premium: true, icon: '🧠', hint: 'Who to give the armband' },
   { id: 'briefing', label: 'Weekly Briefing', premium: true, icon: '📅', hint: 'Your gameweek in a minute' },
@@ -62,6 +65,7 @@ const VIEWS = [
 
 const INTEL_VIEWS = {
   matchxg: { Component: MatchXg, loading: 'Loading Match xG…' },
+  expert: { Component: ExpertView, loading: 'Loading Expert View…' },
   briefing: { Component: WeeklyBriefing, loading: 'Loading Briefing…' },
   prices: { Component: PriceWatch, loading: 'Loading Price Watch…' },
   league: { Component: LeagueWarRoom, loading: 'Loading War Room…' },

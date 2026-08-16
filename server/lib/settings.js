@@ -12,9 +12,26 @@
 
 // The feature tiles an admin may hide from the app's navigation. Matchday is the
 // free home surface and is intentionally not toggleable.
-export const TOGGLEABLE_FEATURES = ['squad', 'captain', 'briefing', 'prices', 'league', 'manager', 'differentials']
+export const TOGGLEABLE_FEATURES = ['matchxg', 'expert', 'squad', 'captain', 'briefing', 'prices', 'league', 'manager', 'differentials']
 
 export const ANNOUNCEMENT_TONES = ['info', 'success', 'warning']
+
+// Expert View sources are operator-supplied and fetched server-side, so cap the
+// list and only keep plainly-public https URLs (mirrors server/lib/expert.js).
+const MAX_EXPERT_SOURCES = 12
+const isHttpsUrl = (value) => {
+  try {
+    const url = new URL(String(value))
+    if (url.protocol !== 'https:') return false
+    const host = url.hostname.toLowerCase()
+    if (host === 'localhost' || host.endsWith('.local') || host.endsWith('.internal')) return false
+    if (/^(127\.|10\.|192\.168\.|169\.254\.|0\.0\.0\.0)/.test(host)) return false
+    if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return false
+    return true
+  } catch {
+    return false
+  }
+}
 
 export const DEFAULT_SETTINGS = {
   ads: {
@@ -35,6 +52,14 @@ export const DEFAULT_SETTINGS = {
   },
   // The club Manager's Mindset opens on when no team is chosen (short name).
   managerDefaultTeam: 'MUN',
+  // Expert View: a curated feed of real FPL-community writing (RSS/Atom sources).
+  expert: {
+    enabled: true,
+    sources: [
+      { name: 'Fantasy Football Scout', url: 'https://www.fantasyfootballscout.co.uk/feed/' },
+      { name: 'r/FantasyPL', url: 'https://www.reddit.com/r/FantasyPL/.rss' },
+    ],
+  },
   // Every toggleable feature defaults to visible.
   features: Object.fromEntries(TOGGLEABLE_FEATURES.map((key) => [key, true])),
 }
@@ -73,6 +98,26 @@ export function sanitizeSettings(patch, base = DEFAULT_SETTINGS) {
     TOGGLEABLE_FEATURES.map((key) => [key, asBool(featIn[key], base.features?.[key] ?? true)]),
   )
 
+  const expertIn = input.expert && typeof input.expert === 'object' ? input.expert : {}
+  const rawSources = Array.isArray(expertIn.sources) ? expertIn.sources : (base.expert?.sources ?? [])
+  const seenUrls = new Set()
+  const sources = []
+  for (const entry of rawSources) {
+    if (!entry || typeof entry !== 'object') continue
+    const url = String(entry.url ?? '').trim()
+    if (!isHttpsUrl(url) || seenUrls.has(url)) continue
+    seenUrls.add(url)
+    sources.push({
+      name: cleanText(entry.name, 60) || new URL(url).hostname.replace(/^www\./, ''),
+      url,
+    })
+    if (sources.length >= MAX_EXPERT_SOURCES) break
+  }
+  const expert = {
+    enabled: asBool(expertIn.enabled, base.expert?.enabled ?? true),
+    sources,
+  }
+
   return {
     ads: {
       enabled: asBool(adsIn.enabled, base.ads.enabled),
@@ -89,6 +134,7 @@ export function sanitizeSettings(patch, base = DEFAULT_SETTINGS) {
       tone,
     },
     managerDefaultTeam: (cleanText(input.managerDefaultTeam ?? base.managerDefaultTeam, 4).toUpperCase() || DEFAULT_SETTINGS.managerDefaultTeam),
+    expert,
     features,
   }
 }

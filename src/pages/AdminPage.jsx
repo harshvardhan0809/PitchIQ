@@ -14,6 +14,8 @@ const PLANS = ['free', 'pro']
 // The premium tiles an admin can hide from the app navigation, with the labels
 // used across the product so the console reads the same as the app.
 const FEATURE_TILES = [
+  { id: 'matchxg', label: 'Match xG', icon: '🥅' },
+  { id: 'expert', label: 'Expert View', icon: '📰' },
   { id: 'squad', label: 'My Team', icon: '🧩' },
   { id: 'captain', label: 'Captain AI', icon: '🧠' },
   { id: 'briefing', label: 'Weekly Briefing', icon: '📅' },
@@ -33,8 +35,25 @@ const TABS = [
   { id: 'users', label: 'Users', icon: '👥' },
   { id: 'ads', label: 'Pro ad', icon: '📣' },
   { id: 'site', label: 'Site', icon: '🎛️' },
+  { id: 'expert', label: 'Expert', icon: '📰' },
   { id: 'system', label: 'System', icon: '🩺' },
 ]
+
+// A plainly-public https URL check, mirroring the server's SSRF guard so the
+// console can flag a bad source row before it's ever saved.
+function isPublicHttps(value) {
+  try {
+    const url = new URL(String(value).trim())
+    if (url.protocol !== 'https:') return false
+    const host = url.hostname.toLowerCase()
+    if (host === 'localhost' || host.endsWith('.local') || host.endsWith('.internal')) return false
+    if (/^(127\.|10\.|192\.168\.|169\.254\.|0\.0\.0\.0)/.test(host)) return false
+    if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return false
+    return true
+  } catch {
+    return false
+  }
+}
 
 function formatDate(value) {
   if (!value) return '—'
@@ -438,6 +457,80 @@ function SiteTab({ ctl, teams }) {
   )
 }
 
+function ExpertTab({ ctl }) {
+  const { form, patchSection } = ctl
+  if (!form) return null
+  const expert = form.expert ?? { enabled: true, sources: [] }
+  const sources = expert.sources ?? []
+
+  function setSources(next) {
+    patchSection('expert', 'sources', next)
+  }
+  function updateSource(index, key, value) {
+    setSources(sources.map((src, i) => (i === index ? { ...src, [key]: value } : src)))
+  }
+  function addSource() {
+    if (sources.length >= 12) return
+    setSources([...sources, { name: '', url: '' }])
+  }
+  function removeSource(index) {
+    setSources(sources.filter((_, i) => i !== index))
+  }
+
+  return (
+    <div className="admin-panels">
+      <section className="admin-card">
+        <div className="admin-card-head">
+          <div>
+            <h2 className="admin-card-title">Expert View feed</h2>
+            <p className="admin-card-sub">
+              A curated stream of real FPL-community writing, pulled from the RSS/Atom sources below and shown to
+              everyone. No content is stored — the app just links out to each article.
+            </p>
+          </div>
+          <Toggle checked={expert.enabled} onChange={(v) => patchSection('expert', 'enabled', v)} label={expert.enabled ? 'On' : 'Off'} />
+        </div>
+
+        <div className={`admin-stack ${expert.enabled ? '' : 'is-disabled'}`}>
+          <div className="admin-sources">
+            {sources.length === 0 && (
+              <p className="admin-field-hint">No sources yet. Add a public feed URL to populate the Expert View.</p>
+            )}
+            {sources.map((src, index) => {
+              const badUrl = src.url.trim() !== '' && !isPublicHttps(src.url)
+              return (
+                <div className="admin-source-row" key={index}>
+                  <input
+                    className="admin-source-name"
+                    type="text" maxLength={60} placeholder="Source name"
+                    value={src.name}
+                    onChange={(e) => updateSource(index, 'name', e.target.value)}
+                  />
+                  <input
+                    className={`admin-source-url ${badUrl ? 'is-invalid' : ''}`}
+                    type="url" inputMode="url" placeholder="https://example.com/feed/"
+                    value={src.url}
+                    onChange={(e) => updateSource(index, 'url', e.target.value)}
+                  />
+                  <button type="button" className="admin-source-del" onClick={() => removeSource(index)} aria-label="Remove source">✕</button>
+                  {badUrl && <span className="admin-source-warn">Must be a public https feed URL.</span>}
+                </div>
+              )
+            })}
+          </div>
+          <button type="button" className="admin-ghost admin-add-source" onClick={addSource} disabled={sources.length >= 12}>
+            + Add source{sources.length >= 12 ? ' (max 12)' : ''}
+          </button>
+          <p className="admin-field-hint">
+            Point these at a site&apos;s RSS/Atom feed — often the homepage URL with <code>/feed/</code> or <code>.rss</code>
+            appended. Invalid or unreachable feeds are skipped automatically; the feed refreshes about every 10 minutes.
+          </p>
+        </div>
+      </section>
+    </div>
+  )
+}
+
 function SystemTab({ diagnostics }) {
   if (!diagnostics) return null
   const d = diagnostics
@@ -514,7 +607,7 @@ export function AdminPage() {
 
         {tab === 'users' && <UsersTab />}
 
-        {(tab === 'ads' || tab === 'site' || tab === 'system') && (
+        {(tab === 'ads' || tab === 'site' || tab === 'expert' || tab === 'system') && (
           <>
             {settingsBusy && (
               <div className="intel-skeleton" aria-hidden="true">
@@ -538,8 +631,9 @@ export function AdminPage() {
               <>
                 {tab === 'ads' && <AdsTab ctl={ctl} />}
                 {tab === 'site' && <SiteTab ctl={ctl} teams={teams} />}
+                {tab === 'expert' && <ExpertTab ctl={ctl} />}
                 {tab === 'system' && <SystemTab diagnostics={ctl.query.data?.diagnostics} />}
-                {(tab === 'ads' || tab === 'site') && (
+                {(tab === 'ads' || tab === 'site' || tab === 'expert') && (
                   <SaveBar dirty={ctl.dirty} saving={ctl.saving} note={ctl.note} onSave={ctl.save} onDiscard={ctl.discard} />
                 )}
               </>
