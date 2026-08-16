@@ -347,44 +347,82 @@ export function demoMatchXg() {
 }
 
 // --- Expert View (demo) -----------------------------------------------------
+// The two video ids below are long-standing, permanently-available uploads used
+// purely to demonstrate the hover-to-play preview offline; live mode shows real
+// FPL YouTube clips from the admin-configured channel feeds.
 export function demoExpert() {
   const hoursAgo = (h) => new Date(Date.now() - h * 3600 * 1000).toISOString()
+  const ytThumb = (id) => `https://i.ytimg.com/vi/${id}/hqdefault.jpg`
   return {
     enabled: true,
     generatedAt: new Date().toISOString(),
-    sources: ['Fantasy Football Scout', 'r/FantasyPL'],
+    sources: ['Fantasy Football Scout', 'r/FantasyPL', "Let's Talk FPL"],
     articles: [
       {
         id: 'demo-1',
+        type: 'article',
         title: 'Scout Picks: the captain call for the double gameweek',
         url: 'https://www.fantasyfootballscout.co.uk/',
         source: 'Fantasy Football Scout',
-        publishedAt: hoursAgo(3),
+        publishedAt: hoursAgo(2),
         excerpt: 'Two premium options stand out for the armband this week, with a differential shout for the brave. Here is how the fixtures and underlying numbers stack up.',
+        image: 'https://images.unsplash.com/photo-1522778119026-d647f0596c20?w=640&q=60&auto=format&fit=crop',
+        videoId: null,
+      },
+      {
+        id: 'demo-v1',
+        type: 'video',
+        title: 'Gameweek team selection & captaincy — full walkthrough',
+        url: 'https://www.youtube.com/watch?v=jNQXAC9IVRw',
+        source: "Let's Talk FPL",
+        publishedAt: hoursAgo(5),
+        excerpt: 'Building the team from the back, where the value is this week, and the captain decision that could swing your mini-league.',
+        image: ytThumb('jNQXAC9IVRw'),
+        videoId: 'jNQXAC9IVRw',
       },
       {
         id: 'demo-2',
+        type: 'article',
         title: 'Wildcard drafts: who is nailing the mid-price midfield?',
         url: 'https://www.reddit.com/r/FantasyPL/',
         source: 'r/FantasyPL',
         publishedAt: hoursAgo(9),
         excerpt: 'The community shares the £6.5m enablers letting them load up on premiums up front. A thread full of drafts and the reasoning behind each pick.',
+        image: null,
+        videoId: null,
+      },
+      {
+        id: 'demo-v2',
+        type: 'video',
+        title: 'Differentials under 10% ownership that could explode',
+        url: 'https://www.youtube.com/watch?v=9bZkp7q19f0',
+        source: "Let's Talk FPL",
+        publishedAt: hoursAgo(14),
+        excerpt: 'Five low-owned picks with the fixtures and underlying numbers to make a real rank push over the next month.',
+        image: ytThumb('9bZkp7q19f0'),
+        videoId: '9bZkp7q19f0',
       },
       {
         id: 'demo-3',
+        type: 'article',
         title: 'Set-and-forget defenders for the run of green fixtures',
         url: 'https://www.fantasyfootballscout.co.uk/',
         source: 'Fantasy Football Scout',
         publishedAt: hoursAgo(26),
         excerpt: 'A look at the backlines with the kindest schedule over the next five, and which full-backs offer the attacking returns to justify a long-term hold.',
+        image: 'https://images.unsplash.com/photo-1560272564-c83b66b1ad12?w=640&q=60&auto=format&fit=crop',
+        videoId: null,
       },
       {
         id: 'demo-4',
+        type: 'article',
         title: 'Price rise watch: three players on the brink tonight',
         url: 'https://www.reddit.com/r/FantasyPL/',
         source: 'r/FantasyPL',
         publishedAt: hoursAgo(31),
         excerpt: 'Transfer momentum is surging on a handful of forwards. If you were planning the move, the community consensus is not to wait past the deadline.',
+        image: null,
+        videoId: null,
       },
     ],
   }

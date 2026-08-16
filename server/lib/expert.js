@@ -59,16 +59,29 @@ function decodeEntities(text) {
   })
 }
 
-/** Collapse a chunk of feed markup into a plain-text excerpt. */
+/**
+ * Collapse a chunk of feed markup into a plain-text excerpt.
+ *
+ * Order matters: many feeds (Reddit, WordPress) *entity-encode* their HTML, so
+ * the body arrives as `&lt;table&gt;…`. We must decode entities FIRST so those
+ * become real tags, then strip them — otherwise the markup shows through as
+ * literal text. A second decode pass handles double-encoded entities (e.g.
+ * `&amp;#39;`). The tag matcher requires a letter/`/`/`!` after `<` so a stray
+ * "5 < 10" in prose isn't mistaken for a tag.
+ */
 function toText(raw, max = EXCERPT_LEN) {
   if (!raw) return ''
-  const stripped = decodeEntities(
-    String(raw)
-      .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
-      .replace(/<[^>]*>/g, ' '),
-  ).replace(/\s+/g, ' ').trim()
-  if (stripped.length <= max) return stripped
-  return `${stripped.slice(0, max).replace(/\s+\S*$/, '')}…`
+  let text = String(raw).replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+  text = decodeEntities(text)
+  text = text
+    .replace(/<!--[\s\S]*?-->/g, ' ') // comments, incl. Reddit's SC_OFF / SC_ON
+    .replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<\/?[a-zA-Z!][^>]*>/g, ' ') // real tags only
+  text = decodeEntities(text)
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (text.length <= max) return text
+  return `${text.slice(0, max).replace(/\s+\S*$/, '')}…`
 }
 
 /** First captured group of the first matching block, unwrapped from CDATA. */
@@ -99,6 +112,37 @@ function toIsoDate(value) {
   return Number.isNaN(date.getTime()) ? null : date.toISOString()
 }
 
+// A YouTube video id is 11 URL-safe chars; pull it from the Atom `yt:videoId`
+// element (channel feeds) or from a watch/short-link URL.
+function youtubeIdFrom(block, link) {
+  const tagged = pick(block, [/<yt:videoId>([\w-]{6,})<\/yt:videoId>/i])
+  if (tagged) return tagged
+  const fromLink = /(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([\w-]{6,})/i.exec(link ?? '')
+  return fromLink ? fromLink[1] : null
+}
+
+/** Best-effort lead image for an article: only https so it never trips CSP/mixed-content. */
+function extractImage(block) {
+  const attr = (re) => { const m = re.exec(block); return m ? m[1] : null }
+  const candidate =
+    attr(/<media:thumbnail[^>]*\burl=["']([^"']+)["']/i)
+    || attr(/<media:content[^>]*\bmedium=["']image["'][^>]*\burl=["']([^"']+)["']/i)
+    || attr(/<media:content[^>]*\burl=["']([^"']+)["'][^>]*\bmedium=["']image["']/i)
+    || attr(/<enclosure[^>]*\btype=["']image\/[^"']*["'][^>]*\burl=["']([^"']+)["']/i)
+    || attr(/<enclosure[^>]*\burl=["']([^"']+)["'][^>]*\btype=["']image\//i)
+    // First <img> inside the (often entity-encoded) content/description.
+    || (() => {
+      const html = decodeEntities(pick(block, [
+        /<content:encoded>([\s\S]*?)<\/content:encoded>/i,
+        /<content[^>]*>([\s\S]*?)<\/content>/i,
+        /<description>([\s\S]*?)<\/description>/i,
+      ]) ?? '')
+      const m = /<img[^>]*\bsrc=["']([^"']+)["']/i.exec(html)
+      return m ? m[1] : null
+    })()
+  return candidate && /^https:\/\//i.test(candidate) ? candidate : null
+}
+
 /** Parse one feed body (RSS 2.0 or Atom) into normalised article objects. */
 function parseFeed(xml, source) {
   const blocks = xml.match(/<item[\s>][\s\S]*?<\/item>/gi)
@@ -116,17 +160,24 @@ function parseFeed(xml, source) {
       /<dc:date>([\s\S]*?)<\/dc:date>/i,
     ]))
     const excerpt = toText(pick(block, [
+      /<media:description>([\s\S]*?)<\/media:description>/i,
       /<description>([\s\S]*?)<\/description>/i,
       /<summary[^>]*>([\s\S]*?)<\/summary>/i,
       /<content[^>]*>([\s\S]*?)<\/content>/i,
     ]))
+    const videoId = youtubeIdFrom(block, link)
+    // YouTube's own thumbnail is a stable https URL derived from the id.
+    const image = videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : extractImage(block)
     articles.push({
       id: link,
+      type: videoId ? 'video' : 'article',
       title,
       url: link,
       source: source.name,
       publishedAt,
       excerpt,
+      image,
+      videoId,
     })
   }
   return articles

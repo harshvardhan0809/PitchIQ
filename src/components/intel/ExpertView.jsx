@@ -1,11 +1,14 @@
+import { useState } from 'react'
+
 import { useAsync } from '../../hooks/useAsync'
 import { fetchExpert } from '../../services/footballApi'
 import '../../styles/intel.css'
 
 /**
- * Expert View: a curated feed of real FPL-community writing, merged from the
- * admin-configured RSS/Atom sources and linking out to the original articles.
- * A free, read-only aggregation — no login, no user-generated content.
+ * Expert View: a curated feed of real FPL-community writing and video, merged
+ * from the admin-configured RSS/Atom sources. Article cards link out; YouTube
+ * cards play a muted preview on hover and open the full video on click. A free,
+ * read-only aggregation — no login, no user-generated content.
  */
 function timeAgo(iso) {
   if (!iso) return ''
@@ -21,6 +24,8 @@ function timeAgo(iso) {
   return new Date(then).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
+const isFresh = (iso) => iso && (Date.now() - Date.parse(iso)) < 3 * 3600 * 1000
+
 // A stable per-source accent so each outlet's chip reads consistently.
 function sourceHue(name) {
   let hash = 0
@@ -28,19 +33,87 @@ function sourceHue(name) {
   return hash
 }
 
-function ArticleCard({ article }) {
+const prefersReducedMotion = () =>
+  typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+
+function Meta({ article }) {
   const hue = sourceHue(article.source)
   return (
-    <li className="exp-card">
-      <a className="exp-link" href={article.url} target="_blank" rel="noopener noreferrer">
-        <div className="exp-meta">
-          <span className="exp-source" style={{ '--exp-hue': hue }}>{article.source}</span>
-          {article.publishedAt && <span className="exp-time">{timeAgo(article.publishedAt)}</span>}
-        </div>
-        <h3 className="exp-title">{article.title}</h3>
+    <div className="exp-meta">
+      <span className="exp-source" style={{ '--exp-hue': hue }}>{article.source}</span>
+      <span className="exp-meta-right">
+        {isFresh(article.publishedAt) && <span className="exp-fresh">New</span>}
+        {article.publishedAt && <span className="exp-time">{timeAgo(article.publishedAt)}</span>}
+      </span>
+    </div>
+  )
+}
+
+// The media area. Video → muted hover preview + play badge; article image →
+// static. A cover link sits on top so a click always opens the source, and an
+// onError drop lets a dead image fall back to a text-only card.
+function Media({ article, imgError, onImgError }) {
+  const [playing, setPlaying] = useState(false)
+  const isVideo = article.type === 'video' && article.videoId
+  const showImage = article.image && !imgError
+
+  if (!isVideo && !showImage) return null
+
+  const enter = () => { if (isVideo && !prefersReducedMotion()) setPlaying(true) }
+  const leave = () => setPlaying(false)
+
+  return (
+    <div
+      className={`exp-media ${isVideo ? 'is-video' : ''}`}
+      onMouseEnter={enter}
+      onMouseLeave={leave}
+    >
+      {isVideo && playing ? (
+        <iframe
+          className="exp-embed"
+          src={`https://www.youtube-nocookie.com/embed/${article.videoId}?autoplay=1&mute=1&controls=0&rel=0&modestbranding=1&playsinline=1&loop=1&playlist=${article.videoId}`}
+          title={article.title}
+          loading="lazy"
+          allow="autoplay; encrypted-media"
+          referrerPolicy="strict-origin-when-cross-origin"
+        />
+      ) : (
+        <img className="exp-thumb" src={article.image} alt="" loading="lazy" onError={onImgError} />
+      )}
+      {isVideo && (
+        <>
+          <span className="exp-play" aria-hidden="true"><span>▶</span></span>
+          <span className="exp-badge-video">Video</span>
+        </>
+      )}
+      <a
+        className="exp-cover"
+        href={article.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={article.title}
+      />
+    </div>
+  )
+}
+
+function Card({ article }) {
+  const [imgError, setImgError] = useState(false)
+  const hue = sourceHue(article.source)
+  const hasMedia = (article.type === 'video' && article.videoId) || (article.image && !imgError)
+  return (
+    <li className={`exp-card ${hasMedia ? 'has-media' : 'text-only'}`} style={{ '--exp-hue': hue }}>
+      <Media article={article} imgError={imgError} onImgError={() => setImgError(true)} />
+      <div className="exp-body">
+        <Meta article={article} />
+        <a className="exp-titlelink" href={article.url} target="_blank" rel="noopener noreferrer">
+          <h3 className="exp-title">{article.title}</h3>
+        </a>
         {article.excerpt && <p className="exp-excerpt">{article.excerpt}</p>}
-        <span className="exp-cta">Read on {article.source} ↗</span>
-      </a>
+        <a className="exp-cta" href={article.url} target="_blank" rel="noopener noreferrer">
+          {article.type === 'video' ? `Watch on ${article.source}` : `Read on ${article.source}`} ↗
+        </a>
+      </div>
     </li>
   )
 }
@@ -63,10 +136,10 @@ export function ExpertView() {
       <header className="intel-head">
         <div>
           <p className="intel-eyebrow">Expert View</p>
-          <h1 className="intel-title">Reads from the community</h1>
+          <h1 className="intel-title">Reads &amp; watches from the community</h1>
           <p className="intel-sub">
-            The latest FPL writing from trusted community sources, gathered in one place. Tap any piece to read the
-            full article at its source.
+            The latest FPL writing and video from trusted community sources, gathered in one place. Hover a clip to
+            preview it; tap any card to open it at the source.
           </p>
           {data?.sources?.length > 0 && (
             <p className="intel-gw">Sourced from <b>{data.sources.join(' · ')}</b></p>
@@ -99,12 +172,12 @@ export function ExpertView() {
           </div>
         ) : (
           <ul className="exp-grid">
-            {articles.map((article) => <ArticleCard key={article.id} article={article} />)}
+            {articles.map((article) => <Card key={article.id} article={article} />)}
           </ul>
         )
       )}
 
-      <p className="exp-foot">Articles are published by their respective authors. PitchIQ links to them for convenience and does not host or endorse the content.</p>
+      <p className="exp-foot">Articles and videos are published by their respective authors. PitchIQ links to them for convenience and does not host or endorse the content.</p>
     </div>
   )
 }

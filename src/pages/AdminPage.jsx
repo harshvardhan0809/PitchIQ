@@ -523,7 +523,9 @@ function ExpertTab({ ctl }) {
           </button>
           <p className="admin-field-hint">
             Point these at a site&apos;s RSS/Atom feed — often the homepage URL with <code>/feed/</code> or <code>.rss</code>
-            appended. Invalid or unreachable feeds are skipped automatically; the feed refreshes about every 10 minutes.
+            appended. <b>YouTube:</b> add a channel as <code>https://www.youtube.com/feeds/videos.xml?channel_id=CHANNEL_ID</code>
+            {' '}— its videos then appear as cards that play a preview on hover. Invalid or unreachable feeds are skipped
+            automatically; the feed refreshes about every 10 minutes.
           </p>
         </div>
       </section>
