@@ -350,6 +350,18 @@ export function demoMatchXg() {
 // Mirrors the live demo fixture (d1: Man City vs Chelsea, 2–1, 67') so the
 // click-to-expand live feed can be seen offline.
 export function demoLive() {
+  // Progressive reveal so the ball's travel is visible in demo mode: each poll
+  // surfaces the next goal, then the sequence loops.
+  const SCORERS = [
+    { key: 'd1:goal:hh1', type: 'goal', side: 'home', playerId: 'hh1', name: 'Haaland', position: 'FWD', teamShort: 'MCI', count: 1 },
+    { key: 'd1:goal:aa1', type: 'goal', side: 'away', playerId: 'aa1', name: 'Palmer', position: 'MID', teamShort: 'CHE', count: 1 },
+    { key: 'd1:goal:hh3', type: 'goal', side: 'home', playerId: 'hh3', name: 'Doku', position: 'MID', teamShort: 'MCI', count: 1 },
+  ]
+  const step = Math.floor(Date.now() / 30000) % (SCORERS.length + 1) // 0..3, advances each poll
+  const goals = SCORERS.slice(0, step)
+  const extras = step >= 2
+    ? [{ key: 'd1:assist:hh2', type: 'assist', side: 'home', playerId: 'hh2', name: 'Foden', position: 'MID', teamShort: 'MCI', count: 1 }]
+    : []
   return {
     generatedAt: new Date().toISOString(),
     event: 12,
@@ -357,14 +369,10 @@ export function demoLive() {
     anyLive: true,
     matches: [
       {
-        id: 'd1', started: true, live: true, finished: false, minute: 67,
-        homeScore: 2, awayScore: 1,
-        events: [
-          { key: 'd1:goal:hh1:1', type: 'goal', side: 'home', playerId: 'hh1', name: 'Haaland', position: 'FWD', teamShort: 'MCI', count: 2 },
-          { key: 'd1:goal:aa1:1', type: 'goal', side: 'away', playerId: 'aa1', name: 'Palmer', position: 'MID', teamShort: 'CHE', count: 1 },
-          { key: 'd1:assist:hh2:1', type: 'assist', side: 'home', playerId: 'hh2', name: 'Foden', position: 'MID', teamShort: 'MCI', count: 1 },
-          { key: 'd1:yellow:aa2:1', type: 'yellow', side: 'away', playerId: 'aa2', name: 'Caicedo', position: 'MID', teamShort: 'CHE', count: 1 },
-        ],
+        id: 'd1', started: true, live: true, finished: false, minute: 15 + step * 12,
+        homeScore: goals.filter((goal) => goal.side === 'home').length,
+        awayScore: goals.filter((goal) => goal.side === 'away').length,
+        events: [...goals, ...extras],
       },
     ],
   }

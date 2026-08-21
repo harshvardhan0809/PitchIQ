@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { TeamCrest } from './TeamCrest'
 import { useAsync } from '../hooks/useAsync'
@@ -7,18 +7,18 @@ import { formatDayHeading, formatRelative, formatScoreline, formatTime } from '.
 
 const csTone = (pct) => (pct >= 45 ? 'good' : pct <= 20 ? 'bad' : 'neutral')
 
-const LIVE_POLL_MS = 30000
+const LIVE_POLL_MS = 12000
 
 // How each fixture-stat event reads in the live feed.
 const EVENT_META = {
-  goal: { icon: '⚽', cls: 'goal' },
-  own_goal: { icon: '⚽ OG', cls: 'og' },
-  assist: { icon: '🅰', cls: 'assist' },
-  yellow: { icon: 'YC', cls: 'yellow' },
-  red: { icon: 'RC', cls: 'red' },
-  bonus: { icon: '★', cls: 'bonus' },
-  pen_saved: { icon: 'SV', cls: 'save' },
-  pen_missed: { icon: 'PM', cls: 'miss' },
+  goal: { icon: '⚽', cls: 'goal', label: 'Goal' },
+  own_goal: { icon: '⚽', cls: 'og', label: 'Own goal' },
+  assist: { icon: '🅰', cls: 'assist', label: 'Assist' },
+  yellow: { icon: 'YC', cls: 'yellow', label: 'Yellow card' },
+  red: { icon: 'RC', cls: 'red', label: 'Red card' },
+  bonus: { icon: '★', cls: 'bonus', label: 'Bonus pts' },
+  pen_saved: { icon: 'SV', cls: 'save', label: 'Pen saved' },
+  pen_missed: { icon: 'PM', cls: 'miss', label: 'Pen missed' },
 }
 
 // Where a scorer/assister sits on the pitch: their side's half, x by role.
@@ -51,6 +51,29 @@ function pitchMarkers(events) {
  */
 function LivePitch({ home, away, info }) {
   const markers = pitchMarkers(info.events)
+
+  // The ball glides to the latest goal the moment a poll surfaces it. Goals
+  // already present when the card first opens are adopted without a move, so the
+  // ball only travels on a genuinely new return — from one scorer to the next.
+  const [ball, setBall] = useState({ x: 50, y: 50, moved: false, n: 0 })
+  const seenGoals = useRef(null)
+
+  useEffect(() => {
+    const current = pitchMarkers(info.events).filter((marker) => marker.type === 'goal')
+    const keys = new Set(current.map((goal) => goal.key))
+    if (seenGoals.current === null) {
+      seenGoals.current = keys
+      return undefined
+    }
+    const fresh = current.filter((goal) => !seenGoals.current.has(goal.key))
+    seenGoals.current = keys
+    if (fresh.length > 0) {
+      const target = fresh[fresh.length - 1]
+      setBall((prev) => ({ x: target.x, y: target.y, moved: true, n: prev.n + 1 }))
+    }
+    return undefined
+  }, [info.events])
+
   return (
     <div className="lp">
       <div className="lp-head">
@@ -71,7 +94,10 @@ function LivePitch({ home, away, info }) {
           <span className="lp-circle" />
           <span className="lp-box left" />
           <span className="lp-box right" />
-          <span className="lp-spot" />
+          {ball.moved && (
+            <span className="lp-ring" key={ball.n} style={{ left: `${ball.x}%`, top: `${ball.y}%` }} />
+          )}
+          <span className="lp-ball" style={{ left: `${ball.x}%`, top: `${ball.y}%` }} />
           {markers.map((marker) => (
             <span
               className={`lp-marker ${marker.type}`}
@@ -100,11 +126,12 @@ function LiveFeed({ info }) {
   return (
     <ul className="mx-feed">
       {info.events.map((event) => {
-        const meta = EVENT_META[event.type] ?? { icon: '•', cls: '' }
+        const meta = EVENT_META[event.type] ?? { icon: '•', cls: '', label: '' }
         return (
           <li className={`mx-feed-item side-${event.side}`} key={event.key}>
             <span className={`mx-feed-badge badge-${meta.cls}`}>{meta.icon}</span>
-            <span className="mx-feed-name">{event.name}{event.count > 1 ? ` ×${event.count}` : ''}</span>
+            <span className="mx-feed-name">{event.name}</span>
+            <span className="mx-feed-type">{meta.label}{event.count > 1 ? ` ×${event.count}` : ''}</span>
             <span className="mx-feed-team">{event.teamShort}</span>
           </li>
         )
@@ -303,18 +330,28 @@ export function MatchdayPanel({ matches, competitionName, league = 'PL' }) {
   const anyItemLive = matches.items.some((item) => item.state === 'live')
   const isLiveWindow = anyItemLive || matches.state === 'live' || (matches.state !== 'recent' && inKickoffWindow)
   const [liveData, setLiveData] = useState(null)
+  const [lastUpdated, setLastUpdated] = useState(null)
   useEffect(() => {
     if (!isLiveWindow) return undefined
     let active = true
     const poll = () => {
       fetchLive(league)
-        .then((data) => { if (active) setLiveData(data) })
+        .then((data) => { if (active) { setLiveData(data); setLastUpdated(Date.now()) } })
         .catch(() => { /* keep the last good snapshot */ })
     }
     poll()
     const id = window.setInterval(poll, LIVE_POLL_MS)
     return () => { active = false; window.clearInterval(id) }
   }, [isLiveWindow, league])
+
+  // Tick every 5s so the "updated Ns ago" freshness stamp stays honest.
+  const [nowTs, setNowTs] = useState(() => Date.now())
+  useEffect(() => {
+    if (!isLiveWindow) return undefined
+    const id = window.setInterval(() => setNowTs(Date.now()), 5000)
+    return () => window.clearInterval(id)
+  }, [isLiveWindow])
+  const agoLabel = lastUpdated ? `${Math.max(0, Math.round((nowTs - lastUpdated) / 1000))}s ago` : null
 
   const liveById = useMemo(
     () => new Map((liveData?.matches ?? []).map((entry) => [entry.id, entry])),
@@ -329,7 +366,7 @@ export function MatchdayPanel({ matches, competitionName, league = 'PL' }) {
           <h2 id="matchday-heading">{matches.heading}</h2>
         </div>
         {isLiveWindow ? (
-          <span className="live-pill"><span className="live-dot" aria-hidden="true" />Live · auto-updating</span>
+          <span className="live-pill"><span className="live-dot" aria-hidden="true" />Live{agoLabel ? ` · updated ${agoLabel}` : ' · connecting…'}</span>
         ) : (
           <p className="panel-note">
             {matches.note}

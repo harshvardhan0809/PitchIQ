@@ -75,7 +75,9 @@ export async function fetchMatchXg(league = 'PL') {
 /** Live match center: scores, match minute and returns landed (free, public). */
 export async function fetchLive(league = 'PL') {
   if (!usesLiveData) return delay(demoLive())
-  return request(`/api/live?league=${encodeURIComponent(league)}`)
+  // Cache-buster: a unique URL per poll defeats any browser/edge caching so a
+  // goal never shows late; the server still coalesces the upstream FPL call.
+  return request(`/api/live?league=${encodeURIComponent(league)}&_t=${Date.now()}`)
 }
 
 /** Expert View: a curated feed of real FPL-community articles (free, public). */

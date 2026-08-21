@@ -101,12 +101,17 @@ function playerStatsFrom(entry) {
   }
 }
 
-function recentFromHistory(entry, teamsById) {
+function recentFromHistory(entry, teamsById, fixtureState) {
   const opponent = teamsById.get(entry.opponent_team)
   const own = entry.was_home ? entry.team_h_score : entry.team_a_score
   const other = entry.was_home ? entry.team_a_score : entry.team_h_score
+  // FPL history carries the *live* score while a match is in progress, so only
+  // grade a result once the fixture has actually finished — otherwise a 2–0 at
+  // half-time would show as a completed win.
+  const state = fixtureState?.get(entry.fixture)
+  const live = Boolean(state?.started && !state?.finished)
   let result = null
-  if (own !== null && own !== undefined && other !== null && other !== undefined) {
+  if (!live && own !== null && own !== undefined && other !== null && other !== undefined) {
     result = own > other ? 'W' : own < other ? 'L' : 'D'
   }
   return {
@@ -117,6 +122,7 @@ function recentFromHistory(entry, teamsById) {
     homeScore: toNumber(entry.team_h_score, null),
     awayScore: toNumber(entry.team_a_score, null),
     result,
+    live,
     home: Boolean(entry.was_home),
     playerStats: playerStatsFrom(entry),
   }
@@ -188,7 +194,8 @@ function buildNextFixture(upcoming, recentMatches, teamName) {
 
 function summarize(recentMatches) {
   const decided = recentMatches.filter((match) => match.result !== null)
-  const teamGoals = recentMatches.reduce((total, match) => {
+  // Only completed matches count toward the totals — a live match isn't final.
+  const teamGoals = decided.reduce((total, match) => {
     const own = match.home ? match.homeScore : match.awayScore
     return total + (own ?? 0)
   }, 0)
@@ -259,14 +266,27 @@ export async function getPlayerDashboard({ identity, fpl }) {
   const positionType = (bootstrap.element_types ?? []).find((entry) => entry.id === element.element_type)
   const seasonUnderway = (bootstrap.events ?? []).some((event) => event.finished)
   const seasonLabelText = seasonLabelFromEvents(bootstrap.events)
+  // The live match a player could feature in is in the current gameweek — pull
+  // that on the short (8s) TTL so a finishing match flips out of "live" quickly;
+  // any older match not in this map is, by definition, already finished.
+  const currentEvent = (bootstrap.events ?? []).find((event) => event.is_current)
+    ?? (bootstrap.events ?? []).find((event) => event.is_next)
 
-  const summary = await fpl.getElementSummary(playerId)
+  const [summary, fixtures] = await Promise.all([
+    fpl.getElementSummary(playerId),
+    currentEvent ? fpl.getLiveFixtures(currentEvent.id) : Promise.resolve([]),
+  ])
+  // Which fixtures have actually finished, so an in-progress match isn't graded.
+  const fixtureState = new Map((fixtures ?? []).map((fixture) => [fixture.id, {
+    started: Boolean(fixture.started),
+    finished: Boolean(fixture.finished || fixture.finished_provisional),
+  }]))
 
   const played = (summary.history ?? [])
     .filter((entry) => entry.team_h_score !== null && entry.team_h_score !== undefined)
     .slice(-RECENT_MATCH_LIMIT)
     .reverse()
-  const recentMatches = played.map((entry) => recentFromHistory(entry, teamsById))
+  const recentMatches = played.map((entry) => recentFromHistory(entry, teamsById, fixtureState))
   const upcomingFixtures = upcomingFromSummary(summary.fixtures, teamsById)
   const name = fullName(element)
 

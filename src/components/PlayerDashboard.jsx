@@ -31,9 +31,13 @@ function MatchRow({ match }) {
   const stats = match.playerStats
   return (
     <li className="match-row">
-      <span className={`result result-${(match.result ?? 'none').toLowerCase()}`}>
-        {match.result ?? '–'}
-      </span>
+      {match.live ? (
+        <span className="result result-live" title="Match in progress"><span className="live-dot" aria-hidden="true" />LIVE</span>
+      ) : (
+        <span className={`result result-${(match.result ?? 'none').toLowerCase()}`}>
+          {match.result ?? '–'}
+        </span>
+      )}
       <div className="match-row-detail">
         <strong>
           <TeamCrest src={match.opponentCrest} name={match.opponent} size={18} />
@@ -41,6 +45,7 @@ function MatchRow({ match }) {
         </strong>
         <small>
           {formatShortDate(match.utcDate)} · {match.homeScore ?? '–'}–{match.awayScore ?? '–'}
+          {match.live ? ' (live)' : ''}
         </small>
       </div>
       {stats ? (

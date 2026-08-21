@@ -789,10 +789,11 @@ const routes = [
   },
   {
     // Live match center — scores, match minute and the returns (goals, assists,
-    // cards, bonus) that have landed. Short cache so the dashboard feels live;
-    // the client only polls it while matches are actually in play.
+    // cards, bonus) that have landed. Never cached at the browser/edge so a goal
+    // shows without stale-cache lag; the server still coalesces the upstream FPL
+    // call behind its own short (8s) fixtures cache. Polled only while matches play.
     pattern: /^\/api\/live$/,
-    cacheControl: 'public, max-age=20',
+    cacheControl: 'no-store',
     handle: async () => getLive({ fpl }),
   },
   {

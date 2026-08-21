@@ -59,7 +59,7 @@ export class FplClient {
    * the general 5-minute fixtures cache.
    */
   getLiveFixtures(event) {
-    return this.request(`fixtures/?event=${encodeURIComponent(event)}`, 30 * 1000)
+    return this.request(`fixtures/?event=${encodeURIComponent(event)}`, 8 * 1000)
   }
 
   getElementSummary(playerId) {
