@@ -17,8 +17,8 @@ export function AccountMenu() {
 
   useEffect(() => {
     const openMe = () => setOpen(true)
-    window.addEventListener('pitchiq-open-account', openMe)
-    return () => window.removeEventListener('pitchiq-open-account', openMe)
+    window.addEventListener('optixi-open-account', openMe)
+    return () => window.removeEventListener('optixi-open-account', openMe)
   }, [])
 
   useEffect(() => {

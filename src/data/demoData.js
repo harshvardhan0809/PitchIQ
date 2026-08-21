@@ -346,6 +346,30 @@ export function demoMatchXg() {
   }
 }
 
+// --- Live match center (demo) ----------------------------------------------
+// Mirrors the live demo fixture (d1: Man City vs Chelsea, 2–1, 67') so the
+// click-to-expand live feed can be seen offline.
+export function demoLive() {
+  return {
+    generatedAt: new Date().toISOString(),
+    event: 12,
+    gameweekName: 'Matchday 12',
+    anyLive: true,
+    matches: [
+      {
+        id: 'd1', started: true, live: true, finished: false, minute: 67,
+        homeScore: 2, awayScore: 1,
+        events: [
+          { key: 'd1:goal:hh1:1', type: 'goal', side: 'home', playerId: 'hh1', name: 'Haaland', position: 'FWD', teamShort: 'MCI', count: 2 },
+          { key: 'd1:goal:aa1:1', type: 'goal', side: 'away', playerId: 'aa1', name: 'Palmer', position: 'MID', teamShort: 'CHE', count: 1 },
+          { key: 'd1:assist:hh2:1', type: 'assist', side: 'home', playerId: 'hh2', name: 'Foden', position: 'MID', teamShort: 'MCI', count: 1 },
+          { key: 'd1:yellow:aa2:1', type: 'yellow', side: 'away', playerId: 'aa2', name: 'Caicedo', position: 'MID', teamShort: 'CHE', count: 1 },
+        ],
+      },
+    ],
+  }
+}
+
 // --- Expert View (demo) -----------------------------------------------------
 // The two video ids below are long-standing, permanently-available uploads used
 // purely to demonstrate the hover-to-play preview offline; live mode shows real

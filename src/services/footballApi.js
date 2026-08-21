@@ -1,4 +1,4 @@
-import { demoDashboards, demoSearchResults, demoSpotlight, demoMatchXg, demoExpert } from '../data/demoData'
+import { demoDashboards, demoSearchResults, demoSpotlight, demoMatchXg, demoExpert, demoLive } from '../data/demoData'
 import { demoPlayerDashboard } from '../data/demoPlayer'
 
 const dataMode = import.meta.env.VITE_DATA_MODE ?? 'demo'
@@ -70,6 +70,12 @@ export async function fetchTeams() {
 export async function fetchMatchXg(league = 'PL') {
   if (!usesLiveData) return delay(demoMatchXg())
   return request(`/api/intel/match-xg?league=${encodeURIComponent(league)}`)
+}
+
+/** Live match center: scores, match minute and returns landed (free, public). */
+export async function fetchLive(league = 'PL') {
+  if (!usesLiveData) return delay(demoLive())
+  return request(`/api/live?league=${encodeURIComponent(league)}`)
 }
 
 /** Expert View: a curated feed of real FPL-community articles (free, public). */

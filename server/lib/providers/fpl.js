@@ -52,6 +52,16 @@ export class FplClient {
     return this.request('fixtures/', 5 * MINUTE)
   }
 
+  /**
+   * Fixtures for a single gameweek on a short TTL — the live match center polls
+   * this while matches are in play. The `?event=` query gives it a distinct cache
+   * key from getFixtures(), so the live feed stays fresh (30s) without shortening
+   * the general 5-minute fixtures cache.
+   */
+  getLiveFixtures(event) {
+    return this.request(`fixtures/?event=${encodeURIComponent(event)}`, 30 * 1000)
+  }
+
   getElementSummary(playerId) {
     return this.request(`element-summary/${playerId}/`, 15 * MINUTE)
   }

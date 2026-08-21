@@ -14,8 +14,8 @@ import { loadSupabase, supabaseConfigured } from './supabaseClient'
  * app runs offline and the demo remains explorable. That path is clearly a
  * simulation, not a security boundary.
  */
-const CHANGE_EVENT = 'pitchiq-auth-change'
-const DEMO_KEY = 'pitchiq_demo_auth'
+const CHANGE_EVENT = 'optixi-auth-change'
+const DEMO_KEY = 'optixi_demo_auth'
 const API_BASE = import.meta.env.VITE_API_URL ?? ''
 export const PLAN_NAMES = { free: 'Free', pro: 'Pro' }
 

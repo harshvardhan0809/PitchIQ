@@ -1,11 +1,117 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { TeamCrest } from './TeamCrest'
 import { useAsync } from '../hooks/useAsync'
-import { fetchMatchXg } from '../services/footballApi'
+import { fetchLive, fetchMatchXg } from '../services/footballApi'
 import { formatDayHeading, formatRelative, formatScoreline, formatTime } from '../lib/format'
 
 const csTone = (pct) => (pct >= 45 ? 'good' : pct <= 20 ? 'bad' : 'neutral')
+
+const LIVE_POLL_MS = 30000
+
+// How each fixture-stat event reads in the live feed.
+const EVENT_META = {
+  goal: { icon: '⚽', cls: 'goal' },
+  own_goal: { icon: '⚽ OG', cls: 'og' },
+  assist: { icon: '🅰', cls: 'assist' },
+  yellow: { icon: 'YC', cls: 'yellow' },
+  red: { icon: 'RC', cls: 'red' },
+  bonus: { icon: '★', cls: 'bonus' },
+  pen_saved: { icon: 'SV', cls: 'save' },
+  pen_missed: { icon: 'PM', cls: 'miss' },
+}
+
+// Where a scorer/assister sits on the pitch: their side's half, x by role.
+const PITCH_X = {
+  home: { GK: 8, DEF: 22, MID: 37, FWD: 47 },
+  away: { GK: 92, DEF: 78, MID: 63, FWD: 53 },
+}
+
+function pitchMarkers(events) {
+  const attack = events.filter((event) => event.type === 'goal' || event.type === 'assist')
+  const bySide = { home: [], away: [] }
+  for (const event of attack) bySide[event.side].push(event)
+  const out = []
+  for (const side of ['home', 'away']) {
+    const list = bySide[side]
+    list.forEach((event, index) => {
+      const x = PITCH_X[side][event.position] ?? (side === 'home' ? 40 : 60)
+      const y = 50 + (index - (list.length - 1) / 2) * 17
+      out.push({ ...event, x, y: Math.max(16, Math.min(84, y)) })
+    })
+  }
+  return out
+}
+
+/**
+ * The live match on a pitch: a tilted field with the score and match clock, and
+ * a marker for every goal/assist popping onto that player's half in their
+ * position zone as it lands. FPL has no ball-tracking, so this is honest — who
+ * scored/assisted and roughly where they play, not real coordinates.
+ */
+function LivePitch({ home, away, info }) {
+  const markers = pitchMarkers(info.events)
+  return (
+    <div className="lp">
+      <div className="lp-head">
+        <span className={`mx-live-state ${info.live ? 'is-live' : ''}`}>
+          {info.live && <span className="live-dot" aria-hidden="true" />}
+          {info.live ? (info.minute ? `LIVE ${info.minute}'` : 'LIVE') : 'Full time'}
+        </span>
+        <span className="lp-scoreline">
+          <b>{home.shortName}</b>
+          <span className="lp-score">{info.homeScore}<i>–</i>{info.awayScore}</span>
+          <b>{away.shortName}</b>
+        </span>
+      </div>
+
+      <div className="lp-scene">
+        <div className="lp-pitch" aria-hidden="true">
+          <span className="lp-line" />
+          <span className="lp-circle" />
+          <span className="lp-box left" />
+          <span className="lp-box right" />
+          <span className="lp-spot" />
+          {markers.map((marker) => (
+            <span
+              className={`lp-marker ${marker.type}`}
+              key={marker.key}
+              style={{ left: `${marker.x}%`, top: `${marker.y}%` }}
+            >
+              <span className="lp-pin">{marker.type === 'goal' ? '⚽' : '🅰'}</span>
+              <span className="lp-tag">{marker.name}{marker.count > 1 ? ` ×${marker.count}` : ''}</span>
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * The full returns list for one match — goals, assists, cards and bonus, each
+ * tied to a real player. Not a timed play-by-play (FPL doesn't timestamp
+ * events); it's the live state, polled, with new rows animating in.
+ */
+function LiveFeed({ info }) {
+  if (info.events.length === 0) {
+    return <p className="mx-feed-empty">No goals or cards yet.</p>
+  }
+  return (
+    <ul className="mx-feed">
+      {info.events.map((event) => {
+        const meta = EVENT_META[event.type] ?? { icon: '•', cls: '' }
+        return (
+          <li className={`mx-feed-item side-${event.side}`} key={event.key}>
+            <span className={`mx-feed-badge badge-${meta.cls}`}>{meta.icon}</span>
+            <span className="mx-feed-name">{event.name}{event.count > 1 ? ` ×${event.count}` : ''}</span>
+            <span className="mx-feed-team">{event.teamShort}</span>
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
 
 /**
  * The expected-goals read for one match, shown when its card is expanded. Every
@@ -73,24 +179,33 @@ function MatchXgDetail({ status, xg }) {
   )
 }
 
-function MatchCard({ match, isOpen, onToggle, xgStatus, xg }) {
+function MatchCard({ match, isOpen, onToggle, xgStatus, xg, liveInfo }) {
   const scoreline = formatScoreline(match)
-  const isLive = match.state === 'live'
+  // Live data (when we have it) is the source of truth for score and status.
+  const showLive = Boolean(liveInfo && (liveInfo.live || liveInfo.finished))
+  const isLive = showLive ? liveInfo.live : match.state === 'live'
+  const finished = showLive ? liveInfo.finished : match.state === 'finished'
+  const showScore = showLive || scoreline !== null
+  const scores = [
+    showLive ? liveInfo.homeScore : match.homeTeam.score,
+    showLive ? liveInfo.awayScore : match.awayTeam.score,
+  ]
+  const statusLabel = isLive
+    ? (liveInfo?.minute ? `${liveInfo.minute}'` : 'LIVE')
+    : finished ? 'FT' : formatTime(match.utcDate)
 
   return (
-    <li className={`match-card state-${match.state} ${isOpen ? 'is-open' : ''}`}>
+    <li className={`match-card state-${match.state} ${isLive ? 'is-live-now' : ''} ${isOpen ? 'is-open' : ''}`}>
       <button
         type="button"
         className="match-card-btn"
         onClick={() => onToggle(match.id)}
         aria-expanded={isOpen}
-        aria-label={`${match.homeTeam.shortName} versus ${match.awayTeam.shortName} — show expected goals`}
+        aria-label={`${match.homeTeam.shortName} versus ${match.awayTeam.shortName} — show the match detail`}
       >
         <div className="match-card-status">
           {isLive && <span className="live-dot" aria-hidden="true" />}
-          <span className={`match-status-label ${isLive ? 'live' : ''}`}>
-            {isLive ? 'Live' : match.state === 'finished' ? 'FT' : formatTime(match.utcDate)}
-          </span>
+          <span className={`match-status-label ${isLive ? 'live' : ''}`}>{statusLabel}</span>
         </div>
 
         <div className="match-card-teams">
@@ -98,7 +213,7 @@ function MatchCard({ match, isOpen, onToggle, xgStatus, xg }) {
             <div className="match-card-team" key={`${match.id}-${index === 0 ? 'home' : 'away'}`}>
               <TeamCrest src={side.crest} name={side.name} />
               <span className="match-card-name">{side.shortName}</span>
-              {scoreline !== null && <span className="match-card-score">{side.score ?? 0}</span>}
+              {showScore && <span className="match-card-score">{scores[index] ?? 0}</span>}
             </div>
           ))}
         </div>
@@ -107,7 +222,17 @@ function MatchCard({ match, isOpen, onToggle, xgStatus, xg }) {
       </button>
 
       {match.state === 'off' && <p className="match-card-note">{match.status.toLowerCase()}</p>}
-      {isOpen && <MatchXgDetail status={xgStatus} xg={xg} />}
+      {isOpen && (
+        <>
+          {showLive && (
+            <div className="mx-live">
+              <LivePitch home={match.homeTeam} away={match.awayTeam} info={liveInfo} />
+              <LiveFeed info={liveInfo} />
+            </div>
+          )}
+          <MatchXgDetail status={xgStatus} xg={xg} />
+        </>
+      )}
     </li>
   )
 }
@@ -159,6 +284,43 @@ export function MatchdayPanel({ matches, competitionName, league = 'PL' }) {
     setOpenId((prev) => (prev === id ? null : id))
   }
 
+  // Live match center: while the round is in play, poll the short-TTL live feed
+  // so scores, the match minute and returns update on their own. State only
+  // advances on a successful poll, so the cards never flash back to static.
+  //
+  // The window opens when the spotlight already says "live", or on wall-clock
+  // once the first kickoff passes — so a page left open before kickoff still
+  // comes alive on its own — and closes ~4h later (or once the round is done).
+  const firstKickoffMs = matches.firstKickoff ? Date.parse(matches.firstKickoff) : null
+  const [nowMs, setNowMs] = useState(() => Date.now())
+  useEffect(() => {
+    const id = window.setInterval(() => setNowMs(Date.now()), 60000)
+    return () => window.clearInterval(id)
+  }, [])
+  const inKickoffWindow = firstKickoffMs != null
+    && nowMs >= firstKickoffMs - 5 * 60000
+    && nowMs <= firstKickoffMs + 4 * 3600000
+  const anyItemLive = matches.items.some((item) => item.state === 'live')
+  const isLiveWindow = anyItemLive || matches.state === 'live' || (matches.state !== 'recent' && inKickoffWindow)
+  const [liveData, setLiveData] = useState(null)
+  useEffect(() => {
+    if (!isLiveWindow) return undefined
+    let active = true
+    const poll = () => {
+      fetchLive(league)
+        .then((data) => { if (active) setLiveData(data) })
+        .catch(() => { /* keep the last good snapshot */ })
+    }
+    poll()
+    const id = window.setInterval(poll, LIVE_POLL_MS)
+    return () => { active = false; window.clearInterval(id) }
+  }, [isLiveWindow, league])
+
+  const liveById = useMemo(
+    () => new Map((liveData?.matches ?? []).map((entry) => [entry.id, entry])),
+    [liveData],
+  )
+
   return (
     <section className="panel matchday-panel" id="matches" aria-labelledby="matchday-heading">
       <header className="panel-header">
@@ -166,10 +328,14 @@ export function MatchdayPanel({ matches, competitionName, league = 'PL' }) {
           <p className="eyebrow">{competitionName}</p>
           <h2 id="matchday-heading">{matches.heading}</h2>
         </div>
-        <p className="panel-note">
-          {matches.note}
-          {relative && matches.state === 'upcoming' ? ` Starts ${relative}.` : ''}
-        </p>
+        {isLiveWindow ? (
+          <span className="live-pill"><span className="live-dot" aria-hidden="true" />Live · auto-updating</span>
+        ) : (
+          <p className="panel-note">
+            {matches.note}
+            {relative && matches.state === 'upcoming' ? ` Starts ${relative}.` : ''}
+          </p>
+        )}
       </header>
 
       {matches.isPreviousSeason && (
@@ -180,7 +346,7 @@ export function MatchdayPanel({ matches, competitionName, league = 'PL' }) {
 
       {hasMatches ? (
         <>
-          <p className="match-hint">Tap a match for its expected-goals &amp; clean-sheet read.</p>
+          <p className="match-hint">Tap a match for live returns &amp; its expected-goals read.</p>
           {groupByDay(matches.items).map(([day, dayMatches]) => (
             <div className="match-day-group" key={day}>
               <h3 className="match-day-heading">{formatDayHeading(dayMatches[0].utcDate)}</h3>
@@ -193,6 +359,7 @@ export function MatchdayPanel({ matches, competitionName, league = 'PL' }) {
                     onToggle={toggle}
                     xgStatus={xg.status}
                     xg={xgById.get(match.id) ?? null}
+                    liveInfo={liveById.get(match.id) ?? null}
                   />
                 ))}
               </ul>

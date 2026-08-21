@@ -15,6 +15,7 @@ import {
 import { FootballDataClient } from './lib/providers/footballData.js'
 import { FplClient } from './lib/providers/fpl.js'
 import { getSpotlight } from './lib/spotlight.js'
+import { getLive } from './lib/live.js'
 import { getPlayerDashboard, searchPlayers } from './lib/players.js'
 import { getCaptainBoard } from './lib/intelligence/captains.js'
 import { getDifferentials } from './lib/intelligence/differentials.js'
@@ -785,6 +786,14 @@ const routes = [
     pattern: /^\/api\/spotlight$/,
     cacheControl: 'public, max-age=60',
     handle: async () => getSpotlight({ fpl }),
+  },
+  {
+    // Live match center — scores, match minute and the returns (goals, assists,
+    // cards, bonus) that have landed. Short cache so the dashboard feels live;
+    // the client only polls it while matches are actually in play.
+    pattern: /^\/api\/live$/,
+    cacheControl: 'public, max-age=20',
+    handle: async () => getLive({ fpl }),
   },
   {
     // Player search — Premier League squad from the FPL API.

@@ -12,7 +12,7 @@ import { useAppConfig } from '../lib/appConfigContext'
  *
  * Mounted inside the product page, so it only runs while someone is using the app.
  */
-const SEEN_KEY = 'pitchiq-pro-ad-seen'
+const SEEN_KEY = 'optixi-pro-ad-seen'
 
 const PERKS = [
   'Full Captain AI board — every pick ranked, not just one',

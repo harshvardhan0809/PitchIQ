@@ -15,7 +15,7 @@ import '../../styles/intel.css'
  * differentials (Pro). The league ID is remembered locally; the caller's FPL team
  * ID (from their profile) is passed through so the server can highlight their row.
  */
-const STORAGE_KEY = 'pitchiq-league-id'
+const STORAGE_KEY = 'optixi-league-id'
 
 function readStored() {
   try { return window.localStorage.getItem(STORAGE_KEY) || '' } catch { return '' }
