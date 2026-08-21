@@ -83,8 +83,8 @@ export async function openCheckout({ subscriptionId, keyId, email }) {
     const checkout = new Razorpay({
       key: keyId,
       subscription_id: subscriptionId,
-      name: 'PitchIQ',
-      description: 'PitchIQ Pro subscription',
+      name: 'OptiXI',
+      description: 'OptiXI Pro subscription',
       prefill: { email: email ?? '' },
       theme: { color: '#24d67f' },
       // The success payload carries the signed proof of payment; pass it back so

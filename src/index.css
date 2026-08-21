@@ -1,18 +1,19 @@
 @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600;700&display=swap');
 
 :root {
-  /* Dark premium palette — shared with the marketing/landing surfaces so the
-     whole product reads as one system. */
-  --ink: #eef4f0;
-  --muted: #93a49b;
-  --green: #24d67f;
-  --green-dark: #6fe0a3;
-  --green-soft: rgba(36, 214, 127, 0.13);
-  --surface: #111815;
-  --tile: #161f1a;
-  --line: rgba(255, 255, 255, 0.08);
-  --line-strong: rgba(255, 255, 255, 0.15);
-  --page: #080b09;
+  /* Red / black / white palette — one system across product + marketing. The
+     accent tokens keep their `--green*` names (referenced app-wide) but carry
+     red values, so the whole app reads red on black with white text. */
+  --ink: #f6f6f7;
+  --muted: #9b9b9f;
+  --green: #e11d2a;
+  --green-dark: #ff4d58;
+  --green-soft: rgba(225, 29, 42, 0.14);
+  --surface: #151516;
+  --tile: #1c1c1e;
+  --line: rgba(255, 255, 255, 0.09);
+  --line-strong: rgba(255, 255, 255, 0.17);
+  --page: #0a0a0b;
   --radius: 13px;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 30px rgba(0, 0, 0, 0.38);
   --sans: Inter, Arial, sans-serif;
@@ -45,3 +46,19 @@ button,
 input {
   font-family: inherit;
 }
+
+/* --- Target Cursor (desktop + motion-on only; mounts via TargetCursor.jsx) --- */
+.oxi-cursor { position: fixed; inset: 0; pointer-events: none; z-index: 9999; opacity: 0; transition: opacity 0.2s ease; }
+.oxi-cursor-dot { position: fixed; top: 0; left: 0; width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 12px rgba(225, 29, 42, 0.6); will-change: transform; }
+.oxi-cursor-frame { position: fixed; top: 0; left: 0; width: 34px; height: 34px; transform-origin: center center; will-change: transform, width, height; transition: width 0.18s ease, height 0.18s ease; }
+.oxi-cursor-frame .c { position: absolute; width: 9px; height: 9px; border: 2px solid var(--green); transition: opacity 0.18s ease; }
+.oxi-cursor-frame .c.tl { top: 0; left: 0; border-right: 0; border-bottom: 0; border-top-left-radius: 3px; }
+.oxi-cursor-frame .c.tr { top: 0; right: 0; border-left: 0; border-bottom: 0; border-top-right-radius: 3px; }
+.oxi-cursor-frame .c.br { bottom: 0; right: 0; border-left: 0; border-top: 0; border-bottom-right-radius: 3px; }
+.oxi-cursor-frame .c.bl { bottom: 0; left: 0; border-right: 0; border-top: 0; border-bottom-left-radius: 3px; }
+.oxi-cursor:not(.is-target) .oxi-cursor-frame .c { opacity: 0.4; }
+.oxi-cursor.is-down .oxi-cursor-frame { filter: brightness(1.25); }
+.oxi-cursor.is-down .oxi-cursor-dot { box-shadow: 0 0 18px var(--green); }
+/* Hide the native cursor only while the custom one drives; keep a caret in fields. */
+html.oxi-cursor-on, html.oxi-cursor-on * { cursor: none !important; }
+html.oxi-cursor-on input, html.oxi-cursor-on textarea, html.oxi-cursor-on [contenteditable] { cursor: text !important; }

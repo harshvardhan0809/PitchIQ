@@ -73,7 +73,7 @@ export function ProUpsell() {
       <div className="pro-ad">
         <button className="pro-ad-close" type="button" onClick={dismiss} aria-label="Dismiss">×</button>
 
-        <span className="pro-ad-badge">PitchIQ Pro</span>
+        <span className="pro-ad-badge">OptiXI Pro</span>
         <h3 id="pro-ad-title" className="pro-ad-title">{ads.headline}</h3>
         <p className="pro-ad-sub">{ads.subtext}</p>
 

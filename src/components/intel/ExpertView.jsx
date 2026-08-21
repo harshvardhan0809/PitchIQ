@@ -177,7 +177,7 @@ export function ExpertView() {
         )
       )}
 
-      <p className="exp-foot">Articles and videos are published by their respective authors. PitchIQ links to them for convenience and does not host or endorse the content.</p>
+      <p className="exp-foot">Articles and videos are published by their respective authors. OptiXI links to them for convenience and does not host or endorse the content.</p>
     </div>
   )
 }

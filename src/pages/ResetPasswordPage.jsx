@@ -45,7 +45,7 @@ export function ResetPasswordPage() {
         <>
           <p className="auth-msg good">Your password has been changed.</p>
           <button type="button" className="mkt-btn mkt-btn-primary auth-submit" onClick={() => navigate('/app', { replace: true })}>
-            Continue to PitchIQ →
+            Continue to OptiXI →
           </button>
         </>
       )
@@ -86,7 +86,7 @@ export function ResetPasswordPage() {
         <div className="auth-card">
           <Link className="auth-brand" to="/">
             <span className="mkt-mark">P</span>
-            <strong>PitchIQ</strong>
+            <strong>OptiXI</strong>
           </Link>
 
           <h1>Reset your password</h1>

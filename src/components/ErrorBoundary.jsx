@@ -12,7 +12,7 @@ export class ErrorBoundary extends Component {
   }
 
   componentDidCatch(error, info) {
-    console.error('PitchIQ render error:', error, info)
+    console.error('OptiXI render error:', error, info)
   }
 
   render() {

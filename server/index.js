@@ -1049,7 +1049,7 @@ function isEntryPoint() {
 if (isEntryPoint()) {
   const server = createServer(handleRequest)
   server.listen(port, host, () => {
-    console.log(`PitchIQ proxy listening on http://${host}:${port} (build ${SERVER_BUILD})`)
+    console.log(`OptiXI proxy listening on http://${host}:${port} (build ${SERVER_BUILD})`)
     console.log(allowList.length > 0 ? `CORS restricted to: ${allowList.join(', ')}` : 'CORS open (set ALLOWED_ORIGINS to restrict)')
     if (!footballData.configured) {
       console.warn('Warning: FOOTBALL_DATA_API_KEY is not set. Live competition endpoints will return 503.')

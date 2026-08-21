@@ -1,8 +1,8 @@
-# ⚽ PitchIQ
+# ⚽ OptiXI
 
 ### Matchday and player intelligence for Europe's top five leagues
 
-PitchIQ opens on what is actually happening: the current round of fixtures, live
+OptiXI opens on what is actually happening: the current round of fixtures, live
 where applicable, alongside the players leading the competition and the numbers
 behind them. From there you can search any squad member and drill into their
 club's form, upcoming schedule and a transparent form-based outlook.

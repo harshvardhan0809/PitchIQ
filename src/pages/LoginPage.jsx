@@ -55,7 +55,7 @@ export function LoginPage() {
         <aside className="auth-aside">
           <Link className="mkt-brand auth-aside-brand" to="/">
             <span className="mkt-mark">P</span>
-            <strong>PitchIQ</strong>
+            <strong>OptiXI</strong>
           </Link>
           <h2 className="auth-aside-title">
             Stop guessing. <span className="grad">Win your mini-league.</span>
@@ -76,12 +76,12 @@ export function LoginPage() {
         <div className="auth-card">
           <Link className="auth-brand" to="/">
             <span className="mkt-mark">P</span>
-            <strong>PitchIQ</strong>
+            <strong>OptiXI</strong>
           </Link>
 
           <h1>{mode === 'signup' ? 'Create your account' : 'Welcome back'}</h1>
           <p className="auth-sub">
-            {mode === 'signup' ? 'Start free — no card required.' : 'Sign in to your PitchIQ account.'}
+            {mode === 'signup' ? 'Start free — no card required.' : 'Sign in to your OptiXI account.'}
           </p>
 
           <div className="auth-tabs" role="tablist">

@@ -18,7 +18,7 @@ const MAX_PER_SOURCE = 12
 const MAX_TOTAL = 40
 const EXCERPT_LEN = 220
 // Feeds routinely reject the default fetch agent; present as a normal reader.
-const USER_AGENT = 'PitchIQ/1.0 (+https://pitch-iq-opal.vercel.app; feed reader)'
+const USER_AGENT = 'OptiXI/1.0 (+https://pitch-iq-opal.vercel.app; feed reader)'
 
 /**
  * Reject anything that isn't a plainly-public https URL, so an admin typo (or a

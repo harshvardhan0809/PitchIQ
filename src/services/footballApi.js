@@ -6,7 +6,7 @@ export const usesLiveData = dataMode === 'live'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? ''
 
-// PitchIQ is Premier League only — powered end to end by the FPL API.
+// OptiXI is Premier League only — powered end to end by the FPL API.
 export const leagueOptions = [
   { code: 'PL', name: 'Premier League', country: 'England' },
 ]
@@ -30,7 +30,7 @@ async function request(path) {
   try {
     response = await fetch(`${API_BASE}${path}`)
   } catch {
-    throw new ApiError('Could not reach the PitchIQ API. Check that the server is running.', 0)
+    throw new ApiError('Could not reach the OptiXI API. Check that the server is running.', 0)
   }
 
   const body = await response.json().catch(() => null)

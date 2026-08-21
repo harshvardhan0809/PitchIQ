@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { MarketingNav, MarketingFooter } from '../components/MarketingNav'
 import { MockCaptainCard } from '../components/MockCaptainCard'
 import { Reveal } from '../components/Reveal'
+import { ScrambleText } from '../components/ScrambleText'
 import '../styles/marketing.css'
 
 const FEATURES = [
@@ -28,9 +29,9 @@ export function LandingPage() {
         <section className="hero">
           <div>
             <span className="hero-eyebrow"><span className="dot" />The FPL decision engine</span>
-            <h1>Stop guessing. <span className="grad">Start winning your mini-league.</span></h1>
+            <h1>Stop guessing. <ScrambleText as="span" className="grad" text="Start winning your mini-league." trigger="mount" duration={1000} /></h1>
             <p className="hero-sub">
-              PitchIQ turns fantasy football data into decisions — who to captain, who to buy,
+              OptiXI turns fantasy football data into decisions — who to captain, who to buy,
               who to bench — with the reasoning behind every call. Not another stats site.
             </p>
             <div className="hero-cta">

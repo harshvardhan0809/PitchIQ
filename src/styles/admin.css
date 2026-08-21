@@ -5,8 +5,8 @@
 .admin-shell {
   min-height: 100vh;
   background:
-    radial-gradient(120% 60% at 50% -10%, rgba(36, 214, 127, 0.06), transparent 60%),
-    #080b09;
+    radial-gradient(120% 60% at 50% -10%, rgba(225, 29, 42, 0.06), transparent 60%),
+    #0a0a0b;
   padding: clamp(16px, 4vw, 44px);
 }
 .admin.intel { max-width: 1040px; margin: 0 auto; }
@@ -52,14 +52,14 @@
   font-family: var(--mono); font-size: .6rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
   padding: 2px 7px; border-radius: 5px; border: 1px solid var(--border-strong); color: var(--muted);
 }
-.admin-plan-tag.pro { color: var(--accent); border-color: rgba(36,214,127,.4); }
+.admin-plan-tag.pro { color: var(--accent); border-color: rgba(225, 29, 42,.4); }
 .admin-plan-tag.elite { color: var(--gold); border-color: rgba(255,209,92,.4); }
 .admin-row-note { margin: 6px 0 0; font-size: .78rem; }
 .admin-row-note.good { color: var(--good); }
 .admin-row-note.bad { color: var(--bad); }
 
 .admin-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 7px; vertical-align: middle; }
-.admin-dot.ok { background: var(--good); box-shadow: 0 0 8px rgba(53,208,127,.5); }
+.admin-dot.ok { background: var(--good); box-shadow: 0 0 8px rgba(255, 255, 255,.5); }
 .admin-dot.pending { background: var(--warn); }
 
 .admin-switch { display: inline-flex; gap: 4px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 3px; float: right; }
@@ -69,9 +69,9 @@
 }
 .admin-switch-btn:hover:not(.active):not(:disabled) { color: var(--ink); }
 .admin-switch-btn:disabled { cursor: default; }
-.admin-switch-btn.active { color: #04140b; background: var(--muted); }
+.admin-switch-btn.active { color: #ffffff; background: var(--muted); }
 .admin-switch-btn.active.free { background: var(--faint); color: var(--ink); }
-.admin-switch-btn.active.pro { background: var(--accent); color: #04140b; }
+.admin-switch-btn.active.pro { background: var(--accent); color: #ffffff; }
 .admin-switch-btn.active.elite { background: var(--gold); color: #2a1e00; }
 
 @media (max-width: 560px) {
@@ -143,7 +143,7 @@
 .admin-field textarea { resize: vertical; line-height: 1.5; }
 .admin-field input:focus,
 .admin-field textarea:focus,
-.admin-field select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(36,214,127,.12); }
+.admin-field select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(225, 29, 42,.12); }
 .admin-input-suffix { position: relative; display: flex; align-items: center; }
 .admin-input-suffix input { padding-right: 42px; font-variant-numeric: tabular-nums; }
 .admin-input-suffix span {
@@ -161,7 +161,7 @@
   position: absolute; top: 2px; left: 2px; width: 17px; height: 17px; border-radius: 50%;
   background: var(--muted); transition: transform .15s, background .15s;
 }
-.admin-toggle.on .admin-toggle-track { background: rgba(36,214,127,.25); border-color: rgba(36,214,127,.5); }
+.admin-toggle.on .admin-toggle-track { background: rgba(225, 29, 42,.25); border-color: rgba(225, 29, 42,.5); }
 .admin-toggle.on .admin-toggle-knob { transform: translateX(17px); background: var(--accent); }
 .admin-toggle-label { font-size: .8rem; font-weight: 600; color: var(--muted); }
 
@@ -169,9 +169,9 @@
 .admin-segmented { display: inline-flex; gap: 4px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 3px; }
 .admin-seg { border: 0; background: transparent; color: var(--muted); font: inherit; font-size: .8rem; font-weight: 600; padding: 6px 14px; border-radius: 7px; cursor: pointer; }
 .admin-seg:hover:not(.active) { color: var(--ink); }
-.admin-seg.active { color: #04140b; }
+.admin-seg.active { color: #ffffff; }
 .admin-seg.active.tone-info { background: #c7d3cd; color: #0f1512; }
-.admin-seg.active.tone-success { background: var(--accent); color: #04140b; }
+.admin-seg.active.tone-success { background: var(--accent); color: #ffffff; }
 .admin-seg.active.tone-warning { background: var(--warn); color: #241a00; }
 
 /* Feature tiles */
@@ -198,7 +198,7 @@
 .admin-savenote.warn { color: var(--warn); }
 .admin-savenote.muted { color: var(--muted); }
 .admin-primary {
-  background: var(--accent); color: #04140b; border: 0; border-radius: 9px; font: inherit; font-weight: 700;
+  background: var(--accent); color: #ffffff; border: 0; border-radius: 9px; font: inherit; font-weight: 700;
   font-size: .86rem; padding: 9px 18px; cursor: pointer;
 }
 .admin-primary:disabled { opacity: .4; cursor: default; }
@@ -212,17 +212,17 @@
 .admin-panels:has(.admin-preview) { }
 .admin-preview { align-self: start; }
 .admin-ad-preview {
-  background: linear-gradient(180deg, rgba(36,214,127,.06), transparent), var(--bg);
+  background: linear-gradient(180deg, rgba(225, 29, 42,.06), transparent), var(--bg);
   border: 1px solid var(--border); border-radius: 14px; padding: 20px; text-align: center;
 }
 .admin-ad-preview .pro-ad-badge {
   display: inline-block; font-family: var(--mono); font-size: .6rem; font-weight: 700; letter-spacing: .12em;
-  text-transform: uppercase; color: var(--accent); border: 1px solid rgba(36,214,127,.4); border-radius: 6px; padding: 3px 9px;
+  text-transform: uppercase; color: var(--accent); border: 1px solid rgba(225, 29, 42,.4); border-radius: 6px; padding: 3px 9px;
 }
 .admin-ad-preview .pro-ad-title { margin: 12px 0 8px; font-size: 1.15rem; color: var(--ink); line-height: 1.25; }
 .admin-ad-preview .pro-ad-sub { margin: 0 0 14px; font-size: .85rem; color: var(--muted); line-height: 1.5; }
 .admin-ad-cta {
-  display: inline-block; background: var(--accent); color: #04140b; font-weight: 700; font-size: .85rem;
+  display: inline-block; background: var(--accent); color: #ffffff; font-weight: 700; font-size: .85rem;
   border-radius: 9px; padding: 9px 16px;
 }
 .admin-preview-note { margin: 12px 0 0; font-size: .76rem; color: var(--faint); text-align: center; }
@@ -236,7 +236,7 @@
 /* Mirrors the app banner: near-black bar, tone tint, accent kept subtle. */
 .admin-note-preview { background-color: #0f1512; color: var(--ink); }
 .admin-note-preview.tone-info { background-image: linear-gradient(90deg, rgba(255,255,255,.06), transparent 70%); border-color: rgba(255,255,255,.16); }
-.admin-note-preview.tone-success { background-image: linear-gradient(90deg, rgba(36,214,127,.16), transparent 70%); border-color: rgba(36,214,127,.30); }
+.admin-note-preview.tone-success { background-image: linear-gradient(90deg, rgba(225, 29, 42,.16), transparent 70%); border-color: rgba(225, 29, 42,.30); }
 .admin-note-preview.tone-warning { background-image: linear-gradient(90deg, rgba(255,209,92,.13), transparent 70%); border-color: rgba(255,209,92,.26); }
 
 /* Diagnostics */
@@ -252,9 +252,9 @@
   font-family: var(--mono); font-size: .74rem; font-weight: 600; padding: 3px 10px; border-radius: 999px;
   border: 1px solid var(--border-strong); color: var(--muted);
 }
-.admin-badge.good { color: var(--good); border-color: rgba(53,208,127,.4); background: rgba(53,208,127,.08); }
+.admin-badge.good { color: var(--good); border-color: rgba(255, 255, 255,.4); background: rgba(255, 255, 255,.08); }
 .admin-badge.bad { color: var(--bad); border-color: rgba(240,90,90,.4); background: rgba(240,90,90,.08); }
-.admin-badge.warn { color: var(--warn); border-color: rgba(240,180,41,.4); background: rgba(240,180,41,.08); }
+.admin-badge.warn { color: var(--warn); border-color: rgba(225, 29, 42,.4); background: rgba(225, 29, 42,.08); }
 .admin-diag-hint { margin: 16px 0 0; font-size: .82rem; color: var(--muted); line-height: 1.5; }
 .admin-diag-hint code { font-family: var(--mono); font-size: .78rem; color: var(--ink); background: var(--bg); padding: 1px 5px; border-radius: 4px; }
 
@@ -271,7 +271,7 @@
   background: var(--bg); border: 1px solid var(--border); border-radius: 9px; color: var(--ink);
   font: inherit; font-size: .86rem; padding: 8px 11px; width: 100%;
 }
-.admin-source-row input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(36,214,127,.12); }
+.admin-source-row input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(225, 29, 42,.12); }
 .admin-source-url.is-invalid { border-color: rgba(240,90,90,.55); }
 .admin-source-del {
   background: transparent; border: 1px solid var(--border); border-radius: 9px; color: var(--faint);

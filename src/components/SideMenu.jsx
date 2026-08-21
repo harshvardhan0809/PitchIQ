@@ -30,7 +30,7 @@ export function SideMenu({ open, onClose, views, activeView, onSelectView, isAdm
         <div className="side-menu-head">
           <span className="side-menu-brand">
             <span className="brand-mark" aria-hidden="true">P</span>
-            <strong>PitchIQ</strong>
+            <strong>OptiXI</strong>
           </span>
           <button className="side-menu-close" type="button" onClick={onClose} aria-label="Close menu">×</button>
         </div>

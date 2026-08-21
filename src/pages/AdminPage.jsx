@@ -361,7 +361,7 @@ function AdsTab({ ctl }) {
       <aside className="admin-card admin-preview">
         <h2 className="admin-card-title">Live preview</h2>
         <div className="admin-ad-preview">
-          <span className="pro-ad-badge">PitchIQ Pro</span>
+          <span className="pro-ad-badge">OptiXI Pro</span>
           <h3 className="pro-ad-title">{ads.headline || 'Headline'}</h3>
           <p className="pro-ad-sub">{ads.subtext || 'Body copy…'}</p>
           <span className="admin-ad-cta">{ads.ctaLabel || 'Upgrade to Pro →'}</span>
@@ -588,7 +588,7 @@ export function AdminPage() {
         <header className="admin-head">
           <div>
             <p className="intel-eyebrow">Admin console</p>
-            <h1 className="intel-title">PitchIQ control</h1>
+            <h1 className="intel-title">OptiXI control</h1>
             <p className="intel-sub">Manage subscriptions and tune the live app — ads, announcements, features and defaults.</p>
           </div>
           <Link className="admin-back" to="/app">← Back to app</Link>

@@ -7,8 +7,8 @@ export function MarketingNav() {
   return (
     <nav className="mkt-nav">
       <Link className="mkt-brand" to="/">
-        <span className="mkt-mark">P</span>
-        <strong>PitchIQ</strong>
+        <img className="mkt-mark" src="/OptiXI.png" alt="" width="34" height="34" />
+        <strong>OptiXI</strong>
       </Link>
       <div className="mkt-nav-links">
         <Link to="/pricing">Pricing</Link>
@@ -29,7 +29,7 @@ export function MarketingNav() {
 export function MarketingFooter() {
   return (
     <footer className="mkt-footer">
-      <span>© {new Date().getFullYear()} PitchIQ · Fantasy football intelligence</span>
+      <span>© {new Date().getFullYear()} OptiXI · Fantasy football intelligence</span>
       <span>
         <Link to="/pricing">Pricing</Link> · <Link to="/login">Log in</Link> · <Link to="/app">Open app</Link>
       </span>

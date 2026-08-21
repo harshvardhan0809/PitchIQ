@@ -65,7 +65,7 @@ function ProfileSection() {
     <form className="acct-card" onSubmit={submit}>
       <div className="acct-card-head">
         <h2 className="acct-card-title">Profile</h2>
-        <p className="acct-card-sub">Details that personalise your PitchIQ — and connect your FPL team.</p>
+        <p className="acct-card-sub">Details that personalise your OptiXI — and connect your FPL team.</p>
       </div>
 
       {profileQuery.status === 'loading' ? (

@@ -5,6 +5,7 @@ import { LandingPage } from './pages/LandingPage'
 import { LoginPage } from './pages/LoginPage'
 import { useAuth } from './lib/auth'
 import { useIsAdmin } from './hooks/useIsAdmin'
+import { TargetCursor } from './components/TargetCursor'
 
 // Split the heavier surfaces so the landing page loads fast.
 const ProductPage = lazy(() => import('./pages/ProductPage')
@@ -20,7 +21,7 @@ const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage')
 
 function RouteFallback() {
   return (
-    <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#080b09', color: '#93a49b' }}>
+    <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#0a0a0b', color: '#9b9b9f' }}>
       Loading…
     </div>
   )
@@ -62,7 +63,9 @@ function RequireAdmin({ children }) {
 
 export default function App() {
   return (
-    <Suspense fallback={<RouteFallback />}>
+    <>
+      <TargetCursor />
+      <Suspense fallback={<RouteFallback />}>
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
@@ -77,6 +80,7 @@ export default function App() {
         <Route path="/admin" element={<RequireAdmin><AdminPage /></RequireAdmin>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-    </Suspense>
+      </Suspense>
+    </>
   )
 }

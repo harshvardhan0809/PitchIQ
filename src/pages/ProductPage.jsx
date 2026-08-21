@@ -41,8 +41,6 @@ const LeagueWarRoom = lazy(() => import('../components/intel/LeagueWarRoom')
   .then((module) => ({ default: module.LeagueWarRoom })))
 const ManagerMindset = lazy(() => import('../components/intel/ManagerMindset')
   .then((module) => ({ default: module.ManagerMindset })))
-const MatchXg = lazy(() => import('../components/intel/MatchXg')
-  .then((module) => ({ default: module.MatchXg })))
 const ExpertView = lazy(() => import('../components/intel/ExpertView')
   .then((module) => ({ default: module.ExpertView })))
 
@@ -51,8 +49,7 @@ const ExpertView = lazy(() => import('../components/intel/ExpertView')
 // the digest that ties it together, the daily market check, the mini-league
 // edge, and finally the advanced differential hunt.
 const VIEWS = [
-  { id: 'matchday', label: 'Matchday', icon: '⚽', hint: 'Fixtures & players to watch' },
-  { id: 'matchxg', label: 'Match xG', icon: '🥅', hint: 'Expected goals & clean sheets' },
+  { id: 'matchday', label: 'Matchday', icon: '⚽', hint: 'Fixtures, xG & players to watch' },
   { id: 'expert', label: 'Expert View', icon: '📰', hint: 'FPL reads from the community' },
   { id: 'squad', label: 'My Team', premium: true, icon: '🧩', hint: 'Your squad, projected & fixed' },
   { id: 'captain', label: 'Captain AI', premium: true, icon: '🧠', hint: 'Who to give the armband' },
@@ -64,7 +61,6 @@ const VIEWS = [
 ]
 
 const INTEL_VIEWS = {
-  matchxg: { Component: MatchXg, loading: 'Loading Match xG…' },
   expert: { Component: ExpertView, loading: 'Loading Expert View…' },
   briefing: { Component: WeeklyBriefing, loading: 'Loading Briefing…' },
   prices: { Component: PriceWatch, loading: 'Loading Price Watch…' },
@@ -125,7 +121,7 @@ function ProductBody() {
   // If the current view was just hidden, fall back to the matchday home.
   const currentView = visibleViews.some((item) => item.id === view) ? view : 'matchday'
   const activeView = visibleViews.find((item) => item.id === currentView) ?? visibleViews[0]
-  const league = 'PL' // PitchIQ is Premier League only.
+  const league = 'PL' // OptiXI is Premier League only.
   const [query, setQuery] = useState('')
   const [reloadToken, setReloadToken] = useState(0)
   const debouncedQuery = useDebounced(query)
@@ -164,9 +160,9 @@ function ProductBody() {
         </button>
 
         <Link className="brand" to="/">
-          <span className="brand-mark" aria-hidden="true">P</span>
+          <img className="brand-mark" src="/OptiXI.png" alt="" width="38" height="38" />
           <span className="brand-text">
-            <strong>PitchIQ</strong>
+            <strong>OptiXI</strong>
             <small>Match &amp; player intelligence</small>
           </span>
         </Link>
