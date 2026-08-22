@@ -19,6 +19,7 @@ export const DEFAULT_CONFIG = {
     ctaLabel: 'Upgrade to Pro →',
   },
   announcement: { enabled: false, text: '', tone: 'info' },
+  maintenance: { enabled: false, message: '' },
   managerDefaultTeam: 'MUN',
   features: {
     matchxg: true, expert: true,
@@ -39,6 +40,7 @@ export async function fetchAppConfig() {
       ...body,
       ads: { ...DEFAULT_CONFIG.ads, ...(body.ads ?? {}) },
       announcement: { ...DEFAULT_CONFIG.announcement, ...(body.announcement ?? {}) },
+      maintenance: { ...DEFAULT_CONFIG.maintenance, ...(body.maintenance ?? {}) },
       features: { ...DEFAULT_CONFIG.features, ...(body.features ?? {}) },
     }
   } catch {

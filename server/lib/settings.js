@@ -50,6 +50,13 @@ export const DEFAULT_SETTINGS = {
     text: '',
     tone: 'info',
   },
+  // Maintenance mode. When on, the app shows a full-screen lockout to everyone
+  // except admins, and the server fails every data endpoint closed (503) — so it
+  // cannot be bypassed by tampering with the browser. See server/index.js.
+  maintenance: {
+    enabled: false,
+    message: 'OptiXI is down for scheduled maintenance. We’re making things better and will be back shortly.',
+  },
   // The club Manager's Mindset opens on when no team is chosen (short name).
   managerDefaultTeam: 'MUN',
   // Expert View: a curated feed of real FPL-community writing (RSS/Atom sources).
@@ -93,6 +100,9 @@ export function sanitizeSettings(patch, base = DEFAULT_SETTINGS) {
   const annIn = input.announcement && typeof input.announcement === 'object' ? input.announcement : {}
   const tone = ANNOUNCEMENT_TONES.includes(annIn.tone) ? annIn.tone : base.announcement.tone
 
+  const maintIn = input.maintenance && typeof input.maintenance === 'object' ? input.maintenance : {}
+  const baseMaint = base.maintenance ?? DEFAULT_SETTINGS.maintenance
+
   const featIn = input.features && typeof input.features === 'object' ? input.features : {}
   const features = Object.fromEntries(
     TOGGLEABLE_FEATURES.map((key) => [key, asBool(featIn[key], base.features?.[key] ?? true)]),
@@ -132,6 +142,11 @@ export function sanitizeSettings(patch, base = DEFAULT_SETTINGS) {
       enabled: asBool(annIn.enabled, base.announcement.enabled),
       text: cleanText(annIn.text ?? base.announcement.text, 200),
       tone,
+    },
+    maintenance: {
+      enabled: asBool(maintIn.enabled, baseMaint.enabled),
+      message: cleanText(maintIn.message ?? baseMaint.message, 240, DEFAULT_SETTINGS.maintenance.message)
+        || DEFAULT_SETTINGS.maintenance.message,
     },
     managerDefaultTeam: (cleanText(input.managerDefaultTeam ?? base.managerDefaultTeam, 4).toUpperCase() || DEFAULT_SETTINGS.managerDefaultTeam),
     expert,

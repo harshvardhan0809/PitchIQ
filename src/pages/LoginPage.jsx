@@ -54,7 +54,7 @@ export function LoginPage() {
       <div className="auth-shell auth-split">
         <aside className="auth-aside">
           <Link className="mkt-brand auth-aside-brand" to="/">
-            <span className="mkt-mark">P</span>
+            <img className="mkt-mark" src="/OptiXI.png" alt="" width="34" height="34" />
             <strong>OptiXI</strong>
           </Link>
           <h2 className="auth-aside-title">
@@ -75,7 +75,7 @@ export function LoginPage() {
 
         <div className="auth-card">
           <Link className="auth-brand" to="/">
-            <span className="mkt-mark">P</span>
+            <img className="mkt-mark" src="/OptiXI.png" alt="" width="34" height="34" />
             <strong>OptiXI</strong>
           </Link>
 

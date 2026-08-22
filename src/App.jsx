@@ -5,7 +5,13 @@ import { LandingPage } from './pages/LandingPage'
 import { LoginPage } from './pages/LoginPage'
 import { useAuth } from './lib/auth'
 import { useIsAdmin } from './hooks/useIsAdmin'
+import { useAppConfig } from './lib/appConfigContext'
 import { TargetCursor } from './components/TargetCursor'
+import { MaintenanceScreen } from './components/MaintenanceScreen'
+
+// While maintenance is on, only these paths stay reachable for non-admins, so an
+// admin can still sign in and lift the lockout from the console.
+const MAINTENANCE_OPEN_PATHS = new Set(['/login', '/reset-password', '/admin'])
 
 // Split the heavier surfaces so the landing page loads fast.
 const ProductPage = lazy(() => import('./pages/ProductPage')
@@ -61,10 +67,31 @@ function RequireAdmin({ children }) {
   return children
 }
 
+/**
+ * Maintenance lockout. When an admin switches maintenance on, everyone but an
+ * admin gets the full-screen notice — except on the sign-in/admin paths, which
+ * stay open so an admin can authenticate and lift it. This is only the visible
+ * half: the server independently fails every data endpoint closed during
+ * maintenance, so the lockout holds even if this screen is bypassed.
+ */
+function MaintenanceGate({ children }) {
+  const { maintenance } = useAppConfig()
+  const isAdmin = useIsAdmin()
+  const location = useLocation()
+
+  const locked = Boolean(maintenance?.enabled)
+    && isAdmin !== true
+    && !MAINTENANCE_OPEN_PATHS.has(location.pathname)
+
+  if (locked) return <MaintenanceScreen message={maintenance?.message} />
+  return children
+}
+
 export default function App() {
   return (
     <>
       <TargetCursor />
+      <MaintenanceGate>
       <Suspense fallback={<RouteFallback />}>
       <Routes>
         <Route path="/" element={<LandingPage />} />
@@ -81,6 +108,7 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       </Suspense>
+      </MaintenanceGate>
     </>
   )
 }

@@ -374,13 +374,51 @@ function AdsTab({ ctl }) {
   )
 }
 
-function SiteTab({ ctl, teams }) {
+function SiteTab({ ctl, teams, diagnostics }) {
   const { form, patchSection, patchTop } = ctl
   if (!form) return null
   const ann = form.announcement
+  const maint = form.maintenance ?? { enabled: false, message: '' }
+  const forceOff = Boolean(diagnostics?.maintenanceForceOff)
 
   return (
     <div className="admin-panels">
+      <section className={`admin-card admin-maint ${maint.enabled ? 'is-live' : ''}`}>
+        <div className="admin-card-head">
+          <div>
+            <h2 className="admin-card-title">Maintenance mode</h2>
+            <p className="admin-card-sub">
+              Locks the whole app behind a full-screen notice for everyone except admins. The server also blocks
+              all data endpoints while it&apos;s on, so it can&apos;t be bypassed. You&apos;ll keep full access to
+              verify things — turn it off here when you&apos;re done.
+            </p>
+          </div>
+          <Toggle checked={maint.enabled} onChange={(v) => patchSection('maintenance', 'enabled', v)} label={maint.enabled ? 'On' : 'Off'} />
+        </div>
+        {forceOff && (
+          <p className="admin-maint-warn" role="status">
+            🛟 A server kill switch (<code>MAINTENANCE_FORCE_OFF</code>) is overriding this — the app is live for
+            everyone no matter what the toggle says. Remove that env var and restart to hand control back to this switch.
+          </p>
+        )}
+        {maint.enabled && !forceOff && (
+          <p className="admin-maint-warn" role="status">
+            ⚠ Maintenance is armed. On save, everyone but an admin will see the lockout immediately.
+          </p>
+        )}
+        <div className="admin-stack">
+          <Field label="Notice message" hint={`${(maint.message ?? '').length}/240 — shown under the “Maintenance in progress” headline.`}>
+            <textarea
+              rows={3}
+              maxLength={240}
+              placeholder="We’re making things better and will be back shortly."
+              value={maint.message ?? ''}
+              onChange={(e) => patchSection('maintenance', 'message', e.target.value)}
+            />
+          </Field>
+        </div>
+      </section>
+
       <section className="admin-card">
         <div className="admin-card-head">
           <div>
@@ -538,6 +576,7 @@ function SystemTab({ diagnostics }) {
   const d = diagnostics
   const items = [
     { label: 'Server build', value: d.serverBuild, tone: 'neutral' },
+    { label: 'Maintenance kill switch', value: d.maintenanceForceOff ? 'Engaged — forced off' : 'Not set', tone: d.maintenanceForceOff ? 'warn' : 'neutral' },
     { label: 'Settings persistence', value: d.settingsPersisted ? 'Supabase (durable)' : 'In-memory only', tone: d.settingsPersisted ? 'good' : 'warn' },
     { label: 'Supabase identity', value: d.supabaseConfigured ? 'Configured' : 'Missing', tone: d.supabaseConfigured ? 'good' : 'bad' },
     { label: 'Service role (manage users)', value: d.supabaseManage ? 'Enabled' : 'Missing', tone: d.supabaseManage ? 'good' : 'bad' },
@@ -632,7 +671,7 @@ export function AdminPage() {
             {ctl.query.status === 'ready' && (
               <>
                 {tab === 'ads' && <AdsTab ctl={ctl} />}
-                {tab === 'site' && <SiteTab ctl={ctl} teams={teams} />}
+                {tab === 'site' && <SiteTab ctl={ctl} teams={teams} diagnostics={ctl.query.data?.diagnostics} />}
                 {tab === 'expert' && <ExpertTab ctl={ctl} />}
                 {tab === 'system' && <SystemTab diagnostics={ctl.query.data?.diagnostics} />}
                 {(tab === 'ads' || tab === 'site' || tab === 'expert') && (

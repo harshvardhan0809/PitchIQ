@@ -85,7 +85,7 @@ export function ResetPasswordPage() {
       <div className="auth-shell">
         <div className="auth-card">
           <Link className="auth-brand" to="/">
-            <span className="mkt-mark">P</span>
+            <img className="mkt-mark" src="/OptiXI.png" alt="" width="34" height="34" />
             <strong>OptiXI</strong>
           </Link>
 

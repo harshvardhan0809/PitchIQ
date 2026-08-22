@@ -21,7 +21,6 @@ import { useAuth, PLAN_NAMES } from '../lib/auth'
 import { useIsAdmin } from '../hooks/useIsAdmin'
 import { PlayerViewProvider } from '../lib/playerView'
 import { usePlayerView } from '../lib/playerViewContext'
-import { AppConfigProvider } from '../lib/appConfig'
 import { useAppConfig } from '../lib/appConfigContext'
 import '../App.css'
 
@@ -98,12 +97,11 @@ function Failure({ error, onRetry }) {
 // its opener so search results, matchday and the intel boards all share one
 // dashboard overlay.
 export function ProductPage() {
+  // App config is provided at the app root (see main.jsx); read via useAppConfig.
   return (
-    <AppConfigProvider>
-      <PlayerViewProvider>
-        <ProductBody />
-      </PlayerViewProvider>
-    </AppConfigProvider>
+    <PlayerViewProvider>
+      <ProductBody />
+    </PlayerViewProvider>
   )
 }
 

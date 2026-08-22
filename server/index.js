@@ -253,6 +253,28 @@ async function requireAdmin(request) {
 
 const normalizePlanValue = (value) => (PLAN_ORDER.includes(value) ? value : 'free')
 
+// Kill switch: an operator can force maintenance OFF from the environment,
+// overriding whatever is stored in settings. This is the always-available way
+// out — set MAINTENANCE_FORCE_OFF=1 on the host and restart, and the app is live
+// again regardless of the toggle, so the admin can never lock themselves out.
+const MAINTENANCE_FORCE_OFF = /^(1|true|yes|on)$/i.test((process.env.MAINTENANCE_FORCE_OFF ?? '').trim())
+
+/** The effective maintenance flag: the stored toggle unless the kill switch wins. */
+function maintenanceOn(settings) {
+  return Boolean(settings?.maintenance?.enabled) && !MAINTENANCE_FORCE_OFF
+}
+
+// Endpoints that stay open even during maintenance: the config the app reads to
+// learn it's in maintenance, health, the session check (so an admin is
+// recognised), the admin console itself (so maintenance can be lifted), and the
+// server-to-server webhook/cron (billing must keep reconciling).
+const MAINTENANCE_OPEN_PATHS = new Set(['/api/config', '/api/health', '/api/auth/me', '/api/billing/webhook'])
+function maintenanceAllows(pathname) {
+  return MAINTENANCE_OPEN_PATHS.has(pathname)
+    || pathname.startsWith('/api/admin/')
+    || pathname.startsWith('/api/cron/')
+}
+
 /** Admin: the full user list with each subscription, for the console. */
 async function handleAdminUsers(request) {
   await requireAdmin(request)
@@ -706,7 +728,13 @@ const routes = [
     cacheControl: 'no-store',
     handle: async () => {
       const settings = await loadSettings()
-      return { build: SERVER_BUILD, ...settings }
+      // Report the *effective* maintenance flag so the kill switch clears the
+      // client lockout too, not just the server-side blocking.
+      return {
+        build: SERVER_BUILD,
+        ...settings,
+        maintenance: { ...settings.maintenance, enabled: maintenanceOn(settings) },
+      }
     },
   },
   {
@@ -733,6 +761,7 @@ const routes = [
         settings,
         diagnostics: {
           serverBuild: SERVER_BUILD,
+          maintenanceForceOff: MAINTENANCE_FORCE_OFF,
           settingsPersisted: settingsState.persisted,
           supabaseConfigured: supabaseAuth.configured,
           supabaseManage: supabaseAuth.canManage,
@@ -1004,6 +1033,26 @@ export async function handleRequest(request, response) {
     url = new URL(request.url, `http://${request.headers.host ?? 'localhost'}`)
   } catch {
     return json(response, 400, { error: 'Malformed request URL.' }, { origin })
+  }
+
+  // Maintenance mode. Enforced here, before any route runs, so it can't be
+  // bypassed by editing the client: while it's on, every data endpoint fails
+  // closed (503) for non-admins. The always-open paths let the app render the
+  // notice and an admin still sign in and lift the lockout; admins themselves are
+  // exempt so they can verify the app before switching it back on.
+  if (!maintenanceAllows(url.pathname)) {
+    const settings = await loadSettings()
+    if (maintenanceOn(settings)) {
+      const user = await supabaseAuth.getUser(bearerToken(request)).catch(() => null)
+      if (!isAdminEmail(user?.email)) {
+        return json(
+          response,
+          503,
+          { error: settings.maintenance.message || 'OptiXI is under maintenance.', maintenance: true },
+          { origin, cacheControl: 'no-store' },
+        )
+      }
+    }
   }
 
   // The Razorpay webhook: server-to-server, signed, verified over the raw body.

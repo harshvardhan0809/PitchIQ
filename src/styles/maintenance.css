@@ -1,0 +1,247 @@
+/* Maintenance lockout — red / black / white, on the app's token system. */
+
+.mnt {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(120% 80% at 50% -10%, rgba(225, 29, 42, 0.18), transparent 60%),
+    var(--page, #0a0a0b);
+  color: var(--ink, #f6f6f7);
+  overflow: hidden;
+}
+
+/* Faint moving grid for a control-room texture. */
+.mnt-grid {
+  position: absolute;
+  inset: -2px;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+  background-size: 46px 46px;
+  mask-image: radial-gradient(circle at 50% 40%, #000 0%, transparent 78%);
+  -webkit-mask-image: radial-gradient(circle at 50% 40%, #000 0%, transparent 78%);
+  animation: mnt-drift 22s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes mnt-drift {
+  from { transform: translateY(0); }
+  to { transform: translateY(46px); }
+}
+
+/* A CRT scanline sweeping down the panel. */
+.mnt-scan {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(255, 255, 255, 0.05) 50%,
+    transparent 100%
+  );
+  background-size: 100% 8px;
+  opacity: 0.35;
+  mix-blend-mode: overlay;
+  animation: mnt-scanmove 6s linear infinite;
+}
+
+@keyframes mnt-scanmove {
+  from { background-position: 0 -100vh; }
+  to { background-position: 0 100vh; }
+}
+
+.mnt-panel {
+  position: relative;
+  width: min(600px, 100%);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.mnt-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.mnt-mark {
+  border-radius: 9px;
+  display: block;
+}
+
+.mnt-wordmark {
+  font-family: var(--display, 'Barlow Condensed', Impact, sans-serif);
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.mnt-eyebrow {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted, #9b9b9f);
+}
+
+.mnt-pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green, #e11d2a);
+  box-shadow: 0 0 0 0 rgba(225, 29, 42, 0.6);
+  animation: mnt-blink 1.6s ease-out infinite;
+}
+
+@keyframes mnt-blink {
+  0% { box-shadow: 0 0 0 0 rgba(225, 29, 42, 0.55); opacity: 1; }
+  70% { box-shadow: 0 0 0 12px rgba(225, 29, 42, 0); opacity: 0.7; }
+  100% { box-shadow: 0 0 0 0 rgba(225, 29, 42, 0); opacity: 1; }
+}
+
+/* --- Glitch headline ------------------------------------------------------ */
+/* Base text plus two coloured, offset copies (::before/::after) fed from the
+   data-text attribute. Each copy is clipped to shifting horizontal slices and
+   nudged sideways, giving a continuous chromatic-tear glitch. */
+.mnt-glitch {
+  position: relative;
+  margin: 4px 0 0;
+  font-family: var(--display, 'Barlow Condensed', Impact, sans-serif);
+  font-weight: 700;
+  font-size: clamp(2.6rem, 12vw, 6rem);
+  line-height: 0.92;
+  letter-spacing: 0.02em;
+  color: #fff;
+  text-shadow: 0 0 18px rgba(225, 29, 42, 0.25);
+  animation: mnt-jitter 3.5s steps(1) infinite;
+}
+
+.mnt-glitch::before,
+.mnt-glitch::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* Red channel, torn upward. */
+.mnt-glitch::before {
+  color: #ff2f3a;
+  left: 2px;
+  text-shadow: -2px 0 rgba(255, 47, 58, 0.9);
+  clip-path: inset(0 0 0 0);
+  animation: mnt-glitch-a 2.4s infinite linear alternate-reverse;
+}
+
+/* Cool-white channel, torn the other way, for the chromatic split. */
+.mnt-glitch::after {
+  color: #d7e7ff;
+  left: -2px;
+  text-shadow: 2px 0 rgba(215, 231, 255, 0.7);
+  clip-path: inset(0 0 0 0);
+  mix-blend-mode: screen;
+  animation: mnt-glitch-b 3.1s infinite linear alternate-reverse;
+}
+
+/* Slice-and-shift the red layer. */
+@keyframes mnt-glitch-a {
+  0%   { clip-path: inset(8% 0 82% 0); transform: translate(-3px, -1px); }
+  10%  { clip-path: inset(88% 0 2% 0); transform: translate(3px, 1px); }
+  20%  { clip-path: inset(40% 0 44% 0); transform: translate(-4px, 0); }
+  30%  { clip-path: inset(70% 0 12% 0); transform: translate(2px, -2px); }
+  40%  { clip-path: inset(20% 0 66% 0); transform: translate(-2px, 1px); }
+  50%  { clip-path: inset(55% 0 30% 0); transform: translate(4px, 0); }
+  60%  { clip-path: inset(4% 0 90% 0); transform: translate(-3px, 2px); }
+  70%  { clip-path: inset(78% 0 8% 0); transform: translate(3px, -1px); }
+  80%  { clip-path: inset(34% 0 52% 0); transform: translate(-4px, 1px); }
+  90%  { clip-path: inset(62% 0 22% 0); transform: translate(2px, 0); }
+  100% { clip-path: inset(14% 0 74% 0); transform: translate(-2px, -1px); }
+}
+
+/* Slice-and-shift the cool layer, out of phase with the red. */
+@keyframes mnt-glitch-b {
+  0%   { clip-path: inset(72% 0 14% 0); transform: translate(3px, 1px); }
+  10%  { clip-path: inset(18% 0 68% 0); transform: translate(-3px, -1px); }
+  20%  { clip-path: inset(50% 0 34% 0); transform: translate(4px, 0); }
+  30%  { clip-path: inset(6% 0 86% 0); transform: translate(-2px, 2px); }
+  40%  { clip-path: inset(80% 0 6% 0); transform: translate(2px, -1px); }
+  50%  { clip-path: inset(30% 0 56% 0); transform: translate(-4px, 0); }
+  60%  { clip-path: inset(64% 0 20% 0); transform: translate(3px, -2px); }
+  70%  { clip-path: inset(12% 0 78% 0); transform: translate(-3px, 1px); }
+  80%  { clip-path: inset(46% 0 40% 0); transform: translate(4px, 0); }
+  90%  { clip-path: inset(24% 0 62% 0); transform: translate(-2px, -1px); }
+  100% { clip-path: inset(58% 0 26% 0); transform: translate(2px, 1px); }
+}
+
+/* Occasional whole-word skew/kick so the glitch isn't perfectly periodic. */
+@keyframes mnt-jitter {
+  0%, 92%, 100% { transform: none; }
+  93% { transform: translate(-2px, 0) skewX(6deg); }
+  95% { transform: translate(2px, 0) skewX(-5deg); }
+  97% { transform: translate(-1px, 1px) skewX(3deg); }
+}
+
+.mnt-subtitle {
+  margin: 0;
+  font-family: var(--display, 'Barlow Condensed', Impact, sans-serif);
+  text-transform: uppercase;
+  letter-spacing: 0.5em;
+  font-size: clamp(0.9rem, 3.5vw, 1.4rem);
+  color: var(--green-dark, #ff4d58);
+  padding-left: 0.5em; /* balance the letter-spacing */
+}
+
+.mnt-message {
+  margin: 6px 0 0;
+  max-width: 46ch;
+  color: var(--muted, #9b9b9f);
+  font-size: 1.02rem;
+  line-height: 1.55;
+}
+
+.mnt-foot {
+  margin-top: 10px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line, rgba(255, 255, 255, 0.09));
+  width: 100%;
+}
+
+.mnt-ticker {
+  display: inline-block;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  color: var(--green-dark, #ff4d58);
+  text-transform: uppercase;
+  animation: mnt-flicker 2.8s steps(1) infinite;
+}
+
+@keyframes mnt-flicker {
+  0%, 100% { opacity: 0.9; }
+  48% { opacity: 0.9; }
+  50% { opacity: 0.35; }
+  52% { opacity: 0.9; }
+  80% { opacity: 0.55; }
+  82% { opacity: 0.9; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mnt-grid,
+  .mnt-scan,
+  .mnt-pulse,
+  .mnt-ticker,
+  .mnt-glitch { animation: none; }
+  .mnt-glitch::before,
+  .mnt-glitch::after { display: none; }
+}
