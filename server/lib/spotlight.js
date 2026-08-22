@@ -38,6 +38,8 @@ function toMatch(fixture, teamsById) {
     utcDate: toIso(fixture.kickoff_time),
     status: state.toUpperCase(),
     state,
+    // A live or finished match has a score to show; a scheduled one does not.
+    hasScore: state !== 'scheduled',
     matchday: fixture.event ?? null,
     homeTeam: teamSide(teamsById.get(fixture.team_h), fixture.team_h_score, state),
     awayTeam: teamSide(teamsById.get(fixture.team_a), fixture.team_a_score, state),

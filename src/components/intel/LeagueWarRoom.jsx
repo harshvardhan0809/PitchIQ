@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom'
 import { useAsync } from '../../hooks/useAsync'
 import { PLAN_LABELS } from '../../lib/plan'
 import { useAuth } from '../../lib/auth'
-import { fetchLeague } from '../../services/intelligenceApi'
+import { fetchLeague, fetchMyLeagues } from '../../services/intelligenceApi'
 import { getProfile } from '../../services/profileApi'
 import { PlayerLink } from '../PlayerLink'
 import '../../styles/intel.css'
@@ -53,14 +53,20 @@ function ConnectForm({ value, onChange, onSubmit, connected, onClear }) {
   )
 }
 
-function YouCard({ you }) {
+function YouCard({ you, hasTeamId }) {
   if (!you) {
     return (
       <div className="wr-you wr-you-empty">
-        <p>
-          Set your FPL Team ID in <Link to="/account" className="wr-inline-link">your profile</Link> to highlight your row
-          and see your exact gap to overtake.
-        </p>
+        {hasTeamId ? (
+          <p>
+            Your team isn’t in this league. Pick one of <b>your leagues</b> above to see your rank and exact gap to overtake.
+          </p>
+        ) : (
+          <p>
+            Set your FPL Team ID in <Link to="/account" className="wr-inline-link">your profile</Link> to highlight your row
+            and see your exact gap to overtake.
+          </p>
+        )}
       </div>
     )
   }
@@ -214,6 +220,7 @@ export function LeagueWarRoom({ league = 'PL' }) {
   const [leagueId, setLeagueId] = useState(readStored)
   const [submitted, setSubmitted] = useState(readStored)
   const [entryId, setEntryId] = useState('')
+  const [myLeagues, setMyLeagues] = useState([])
 
   // Pull the caller's own team ID from their profile so the server can highlight
   // their row and compute the overtake gap.
@@ -225,6 +232,27 @@ export function LeagueWarRoom({ league = 'PL' }) {
       .catch(() => { /* highlight is optional */ })
     return () => { active = false }
   }, [signedIn])
+
+  // With a team ID on file, offer the manager their *own* leagues (no manual
+  // hunt) and auto-open the first if nothing is loaded yet.
+  useEffect(() => {
+    if (!entryId) return undefined
+    let active = true
+    fetchMyLeagues(entryId)
+      .then((data) => {
+        if (!active) return
+        const leagues = data?.leagues ?? []
+        setMyLeagues(leagues)
+        if (!readStored() && leagues.length > 0) {
+          const first = String(leagues[0].id)
+          writeStored(first)
+          setLeagueId(first)
+          setSubmitted(first)
+        }
+      })
+      .catch(() => { if (active) setMyLeagues([]) })
+    return () => { active = false }
+  }, [entryId])
 
   const { status, data, error, reload } = useAsync(fetchLeague, [submitted, entryId, league], {
     enabled: Boolean(submitted),
@@ -246,7 +274,15 @@ export function LeagueWarRoom({ league = 'PL' }) {
     setSubmitted('')
   }
 
+  function pickLeague(id) {
+    const value = String(id)
+    writeStored(value)
+    setLeagueId(value)
+    setSubmitted(value)
+  }
+
   const empty = data && data.standings.length === 0
+  const pickerValue = myLeagues.some((item) => String(item.id) === submitted) ? submitted : ''
 
   return (
     <div className="intel wr">
@@ -261,6 +297,26 @@ export function LeagueWarRoom({ league = 'PL' }) {
         </div>
       </header>
 
+      {myLeagues.length > 0 && (
+        <div className="wr-league-picker">
+          <label htmlFor="my-leagues" className="sq-connect-label">Your leagues</label>
+          <select
+            id="my-leagues"
+            className="wr-league-select"
+            value={pickerValue}
+            onChange={(event) => { if (event.target.value) pickLeague(event.target.value) }}
+          >
+            <option value="">Choose one of your leagues…</option>
+            {myLeagues.map((item) => (
+              <option key={item.id} value={String(item.id)}>
+                {item.name}{item.rank ? ` — #${item.rank}` : ''}
+              </option>
+            ))}
+          </select>
+          <p className="sq-connect-hint">These are the classic leagues your saved FPL team is in. Or enter any league ID below.</p>
+        </div>
+      )}
+
       <ConnectForm
         value={leagueId}
         onChange={setLeagueId}
@@ -269,7 +325,11 @@ export function LeagueWarRoom({ league = 'PL' }) {
         onClear={handleClear}
       />
 
-      {!submitted && <p className="sq-idle">Enter your league ID above to open the War Room.</p>}
+      {!submitted && (
+        <p className="sq-idle">
+          {myLeagues.length > 0 ? 'Pick one of your leagues above to open the War Room.' : 'Enter your league ID above to open the War Room.'}
+        </p>
+      )}
 
       {submitted && status === 'loading' && <Skeleton />}
 
@@ -300,7 +360,7 @@ export function LeagueWarRoom({ league = 'PL' }) {
               </div>
             </section>
 
-            <YouCard you={data.you} />
+            <YouCard you={data.you} hasTeamId={Boolean(entryId)} />
             <StandingsTable standings={data.standings} locked={data.locked} />
 
             {data.locked

@@ -460,6 +460,14 @@
 }
 
 /* ---- Mini-League War Room ---- */
+.wr-league-picker { margin: 0 0 16px; display: flex; flex-direction: column; gap: 8px; }
+.wr-league-select {
+  width: 100%; max-width: 440px;
+  background: var(--panel); border: 1px solid var(--border-strong); border-radius: 10px;
+  color: var(--ink); font: inherit; font-size: .95rem; padding: 12px 14px; cursor: pointer; appearance: none;
+}
+.wr-league-select:focus { outline: none; border-color: var(--accent); }
+
 .wr-head { margin: 4px 0 16px; }
 .wr-league-name { margin: 0; font-size: 1.3rem; font-weight: 800; letter-spacing: -.01em; }
 .wr-league-meta { margin: 4px 0 0; font-family: var(--mono); font-size: .78rem; color: var(--muted); }

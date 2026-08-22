@@ -895,6 +895,26 @@ const routes = [
     },
   },
   {
+    // The classic mini-leagues a team belongs to — so the War Room can offer the
+    // user their own leagues from their profile team ID instead of a manual hunt.
+    // Global/country leagues are filtered out; only custom leagues are useful here.
+    pattern: /^\/api\/my-leagues$/,
+    cacheControl: 'no-store',
+    handle: async (_match, url) => {
+      const entryId = parseEntryId(url.searchParams.get('entry'))
+      if (!entryId) throw new HttpError('An FPL team ID is required.', 400)
+      const entry = await fpl.getEntry(entryId)
+      const leagues = (entry?.leagues?.classic ?? [])
+        .filter((item) => item.league_type === 'x')
+        .map((item) => ({ id: item.id, name: item.name, rank: item.entry_rank ?? null }))
+      return {
+        entryId,
+        teamName: [entry?.player_first_name, entry?.player_last_name].filter(Boolean).join(' ') || null,
+        leagues,
+      }
+    },
+  },
+  {
     // Manager's Mindset — a club's tactical mentality read from its on-pitch
     // behaviour, and how it shapes the next fixture. Premium, PL only, no-store
     // because the payload is gated to the caller's plan.

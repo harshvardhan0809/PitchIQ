@@ -69,6 +69,27 @@ export function fetchLeague(leagueId, entryId = '', league = 'PL') {
 }
 
 /**
+ * The signed-in manager's own classic mini-leagues, from their FPL team ID — so
+ * the War Room offers their leagues rather than making them hunt a league ID.
+ */
+export async function fetchMyLeagues(entryId) {
+  const id = String(entryId ?? '').trim()
+  if (!id) return { entryId: null, leagues: [] }
+  if (!usesLiveData) {
+    return delay({ entryId: id, teamName: 'Demo Manager', leagues: [{ id: '999', name: 'Contest of Champions', rank: 1 }] })
+  }
+  let response
+  try {
+    response = await fetch(`${API_BASE}/api/my-leagues?entry=${encodeURIComponent(id)}`)
+  } catch {
+    throw new ApiError('Could not load your leagues.', 0)
+  }
+  const body = await response.json().catch(() => null)
+  if (!response.ok) throw new ApiError(body?.error ?? 'Could not load your leagues.', response.status)
+  return body
+}
+
+/**
  * Manager's Mindset for a club. `teamId` is the FPL team id (1–20); when omitted
  * the server picks a marquee side. The response also carries the full team list
  * so the picker renders from the same call.
